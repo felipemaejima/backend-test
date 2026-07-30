@@ -120,3 +120,4 @@ Em caso de empate no `urgencyScore`, aplicar:
 
 # TODO
  - Subir a aplicação para exemplificar a usabilidade (se sobrar tempo)
+ - Detalhar o uso de IA
