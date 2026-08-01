@@ -1,6 +1,6 @@
 COMPOSE := docker compose
 
-.PHONY: help up down down-v logs restart test cover migrate-up migrate-down migrate-create tidy fmt vet build sh psql
+.PHONY: help up down down-v logs restart test test-api cover migrate-up migrate-down migrate-create tidy fmt vet build sh psql
 
 help: ## Lista os comandos disponíveis
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -21,8 +21,11 @@ logs: ## Acompanha os logs da API
 restart: ## Reinicia a API
 	$(COMPOSE) restart api
 
-test: ## Roda a suíte de testes dentro do container
+test: ## Testes unitários (sem banco, com -race)
 	$(COMPOSE) run --rm --no-deps test
+
+test-api: ## Requisições reais contra a API rodando (exige `make up` antes)
+	$(COMPOSE) run --rm --no-deps -e BASE_URL=$${BASE_URL:-http://api:8080} test go run ./api-tests
 
 cover: ## Roda os testes com relatório de cobertura por pacote
 	$(COMPOSE) run --rm --no-deps test go test ./... -coverprofile=coverage.out -covermode=atomic
