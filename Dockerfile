@@ -12,10 +12,6 @@ COPY . .
 EXPOSE 8080
 CMD ["air", "-c", ".air.toml"]
 
-FROM base AS test
-COPY . .
-CMD ["go", "test", "./...", "-race", "-cover"]
-
 FROM base AS builder
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false -ldflags="-s -w" -o /out/api ./cmd/api
