@@ -3,6 +3,7 @@ package domain
 import (
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -132,6 +133,16 @@ func TestNewPartRejectsInvalidInput(t *testing.T) {
 			wantFields: []string{"criticalityLevel"},
 		},
 		{
+			name:       "name above the length limit",
+			mutate:     func(in *PartInput) { in.Name = strings.Repeat("a", maxNameLength+1) },
+			wantFields: []string{"name"},
+		},
+		{
+			name:       "category above the length limit",
+			mutate:     func(in *PartInput) { in.Category = strings.Repeat("b", maxCategoryLength+1) },
+			wantFields: []string{"category"},
+		},
+		{
 			name: "multiple violations accumulate",
 			mutate: func(in *PartInput) {
 				in.Name = ""
@@ -160,6 +171,29 @@ func TestNewPartRejectsInvalidInput(t *testing.T) {
 				t.Errorf("fields = %v, expected %v", got, tt.wantFields)
 			}
 		})
+	}
+}
+
+func TestNewPartAcceptsLengthsAtTheLimit(t *testing.T) {
+	in := validInput()
+	in.Name = strings.Repeat("a", maxNameLength)
+	in.Category = strings.Repeat("b", maxCategoryLength)
+
+	if _, err := NewPart(in); err != nil {
+		t.Fatalf("lengths at the limit should be accepted, got: %v", err)
+	}
+}
+
+func TestLengthLimitsCountRunesNotBytes(t *testing.T) {
+	in := validInput()
+	in.Name = strings.Repeat("é", maxNameLength)
+
+	part, err := NewPart(in)
+	if err != nil {
+		t.Fatalf("120 accented runes should be accepted, got: %v", err)
+	}
+	if len(part.Name) <= maxNameLength {
+		t.Fatalf("test is not exercising multi-byte characters: %d bytes", len(part.Name))
 	}
 }
 
