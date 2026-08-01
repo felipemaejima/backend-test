@@ -1,0 +1,147 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Formatação, vet e testes unitários
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Formatação
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "Arquivos fora do padrão do gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go.mod e go.sum em dia
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: Build
+        run: go build ./...
+
+      - name: Testes
+        run: go test ./... -race -covermode=atomic -coverprofile=coverage.out
+
+      - name: Cobertura por pacote
+        run: go tool cover -func=coverage.out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+          retention-days: 7
+
+  api:
+    name: Testes de API contra Postgres
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: restock
+          POSTGRES_PASSWORD: restock
+          POSTGRES_DB: restock
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U restock -d restock"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      APP_PORT: 8080
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USER: restock
+      DB_PASSWORD: restock
+      DB_NAME: restock
+      DB_SSLMODE: disable
+      DATABASE_URL: postgres://restock:restock@localhost:5432/restock?sslmode=disable
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Instalar golang-migrate
+        run: go install -tags postgres github.com/golang-migrate/migrate/v4/cmd/migrate@v4.17.1
+
+      - name: Aplicar migrations
+        run: migrate -path ./migrations -database "$DATABASE_URL" up
+
+      - name: Subir a API
+        run: |
+          go build -o /tmp/api ./cmd/api
+          /tmp/api > /tmp/api.log 2>&1 &
+          echo $! > /tmp/api.pid
+
+          for _ in $(seq 1 30); do
+            if curl -sf "http://localhost:${APP_PORT}/health" > /dev/null; then
+              echo "API respondendo"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "API não subiu em 30s"
+          cat /tmp/api.log
+          exit 1
+
+      - name: Requisições reais contra a API
+        run: BASE_URL=http://localhost:${APP_PORT} go run ./api-tests
+
+      - name: Logs da API
+        if: failure()
+        run: cat /tmp/api.log || true
+
+      - name: Encerrar a API
+        if: always()
+        run: kill "$(cat /tmp/api.pid)" 2>/dev/null || true
+
+  image:
+    name: Imagem de produção
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build da imagem
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

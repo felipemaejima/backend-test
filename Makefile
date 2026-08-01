@@ -1,6 +1,6 @@
 COMPOSE := docker compose
 
-.PHONY: help up down down-v logs restart test test-api cover migrate-up migrate-down migrate-create tidy fmt vet build sh psql
+.PHONY: help up down down-v logs restart test test-api cover ci fmt-check migrate-up migrate-down migrate-create tidy fmt vet build sh psql
 
 help: ## Lista os comandos disponíveis
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -26,6 +26,18 @@ test: ## Testes unitários (sem banco, com -race)
 
 test-api: ## Requisições reais contra a API rodando (exige `make up` antes)
 	$(COMPOSE) run --rm --no-deps -e BASE_URL=$${BASE_URL:-http://api:8080} test go run ./api-tests
+
+ci: ## Roda localmente as mesmas verificações do CI
+	@$(MAKE) fmt-check
+	@$(MAKE) vet
+	@$(MAKE) test
+
+fmt-check: ## Falha se algum arquivo estiver fora do padrão do gofmt
+	@out="$$($(COMPOSE) run --rm --no-deps -T test gofmt -l .)"; \
+	if [ -n "$$out" ]; then \
+		echo "Arquivos fora do padrão do gofmt:"; echo "$$out"; exit 1; \
+	fi
+	@echo "gofmt OK"
 
 cover: ## Roda os testes com relatório de cobertura por pacote
 	$(COMPOSE) run --rm --no-deps test go test ./... -coverprofile=coverage.out -covermode=atomic
