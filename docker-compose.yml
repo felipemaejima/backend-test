@@ -1,0 +1,74 @@
+name: restock
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: restock-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-restock}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-restock}
+      POSTGRES_DB: ${DB_NAME:-restock}
+    ports:
+      - "${DB_EXTERNAL_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-restock} -d ${DB_NAME:-restock}"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    image: migrate/migrate:v4.17.1
+    container_name: restock-migrate
+    volumes:
+      - ./migrations:/migrations:ro
+    command:
+      - "-path=/migrations"
+      - "-database=postgres://${DB_USER:-restock}:${DB_PASSWORD:-restock}@postgres:5432/${DB_NAME:-restock}?sslmode=disable"
+      - "up"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      target: dev
+    container_name: restock-api
+    environment:
+      APP_PORT: 8080
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-restock}
+      DB_PASSWORD: ${DB_PASSWORD:-restock}
+      DB_NAME: ${DB_NAME:-restock}
+      DB_SSLMODE: disable
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "${APP_EXTERNAL_PORT:-8080}:8080"
+    volumes:
+      - .:/app
+      - gomodcache:/go/pkg/mod
+      - gobuildcache:/root/.cache/go-build
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  test:
+    build:
+      context: .
+      target: dev
+    profiles: ["tools"]
+    volumes:
+      - .:/app
+      - gomodcache:/go/pkg/mod
+      - gobuildcache:/root/.cache/go-build
+    command: ["go", "test", "./...", "-race", "-cover"]
+
+volumes:
+  pgdata:
+  gomodcache:
+  gobuildcache:

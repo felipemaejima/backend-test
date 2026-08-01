@@ -1,0 +1,11 @@
+# build
+tmp/
+/api
+/seed
+
+# ambiente
+.env
+
+# cobertura
+*.out
+coverage.*
