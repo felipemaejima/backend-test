@@ -34,6 +34,16 @@ func Connect(ctx context.Context, dsn string) (*gorm.DB, error) {
 	return db, nil
 }
 
+func Pinger(db *gorm.DB) func(ctx context.Context) error {
+	return func(ctx context.Context) error {
+		sqlDB, err := db.DB()
+		if err != nil {
+			return err
+		}
+		return sqlDB.PingContext(ctx)
+	}
+}
+
 func Close(db *gorm.DB) error {
 	sqlDB, err := db.DB()
 	if err != nil {

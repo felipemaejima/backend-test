@@ -1,7 +1,9 @@
 package http_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,10 +18,15 @@ import (
 )
 
 func newTestApp() *fiber.App {
+	return newTestAppWithHealth(func(context.Context) error { return nil })
+}
+
+func newTestAppWithHealth(check httpapi.HealthChecker) *fiber.App {
 	repo := memory.NewPartRepository()
 	return httpapi.NewRouter(
 		httpapi.NewPartHandler(service.NewPartService(repo)),
 		httpapi.NewRestockHandler(service.NewRestockService(repo)),
+		httpapi.NewHealthHandler(check),
 	)
 }
 
@@ -74,6 +81,23 @@ func TestHealth(t *testing.T) {
 	}
 	if body["status"] != "ok" {
 		t.Errorf("body = %v", body)
+	}
+	if body["database"] != "up" {
+		t.Errorf("database = %v, expected up", body["database"])
+	}
+}
+
+func TestHealthReportsUnavailableWhenDatabaseIsDown(t *testing.T) {
+	app := newTestAppWithHealth(func(context.Context) error {
+		return errors.New("connection refused")
+	})
+
+	status, body := do(t, app, http.MethodGet, "/health", "")
+	if status != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, expected 503", status)
+	}
+	if body["database"] != "down" {
+		t.Errorf("database = %v, expected down", body["database"])
 	}
 }
 

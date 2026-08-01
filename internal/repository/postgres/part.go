@@ -121,6 +121,8 @@ func (r *PartRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Pa
 }
 
 func (r *PartRepository) List(ctx context.Context, filter domain.PartFilter) ([]domain.Part, error) {
+	filter = filter.Normalize()
+
 	query := r.db.WithContext(ctx).Model(&partModel{})
 	if filter.Category != "" {
 		query = query.Where("category = ?", filter.Category)

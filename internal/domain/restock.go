@@ -1,15 +1,21 @@
 package domain
 
 import (
-	"sort"
+	"cmp"
+	"math"
+	"slices"
 	"strings"
 )
+
+const urgencyScoreEpsilon = 1e-9
 
 type RestockPriority struct {
 	Part                Part
 	ExpectedConsumption float64
 	ProjectedStock      float64
 	UrgencyScore        float64
+
+	sortName string
 }
 
 func (p Part) ExpectedConsumption() float64 {
@@ -34,6 +40,7 @@ func NewRestockPriority(part Part) RestockPriority {
 		ExpectedConsumption: part.ExpectedConsumption(),
 		ProjectedStock:      part.ProjectedStock(),
 		UrgencyScore:        part.UrgencyScore(),
+		sortName:            strings.ToLower(part.Name),
 	}
 }
 
@@ -46,22 +53,20 @@ func CalculateRestockPriorities(parts []Part) []RestockPriority {
 		priorities = append(priorities, NewRestockPriority(part))
 	}
 
-	sort.SliceStable(priorities, func(i, j int) bool {
-		return higherPriority(priorities[i], priorities[j])
-	})
+	slices.SortStableFunc(priorities, comparePriorities)
 
 	return priorities
 }
 
-func higherPriority(a, b RestockPriority) bool {
-	if a.UrgencyScore != b.UrgencyScore {
-		return a.UrgencyScore > b.UrgencyScore
+func comparePriorities(a, b RestockPriority) int {
+	if math.Abs(a.UrgencyScore-b.UrgencyScore) > urgencyScoreEpsilon {
+		return cmp.Compare(b.UrgencyScore, a.UrgencyScore)
 	}
-	if a.Part.CriticalityLevel != b.Part.CriticalityLevel {
-		return a.Part.CriticalityLevel > b.Part.CriticalityLevel
+	if c := cmp.Compare(b.Part.CriticalityLevel, a.Part.CriticalityLevel); c != 0 {
+		return c
 	}
-	if a.Part.AverageDailySales != b.Part.AverageDailySales {
-		return a.Part.AverageDailySales > b.Part.AverageDailySales
+	if c := cmp.Compare(b.Part.AverageDailySales, a.Part.AverageDailySales); c != 0 {
+		return c
 	}
-	return strings.ToLower(a.Part.Name) < strings.ToLower(b.Part.Name)
+	return cmp.Compare(a.sortName, b.sortName)
 }

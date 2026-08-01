@@ -1,8 +1,10 @@
 package memory
 
 import (
+	"bytes"
+	"cmp"
 	"context"
-	"sort"
+	"slices"
 	"sync"
 
 	"github.com/google/uuid"
@@ -59,6 +61,8 @@ func (r *PartRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Pa
 }
 
 func (r *PartRepository) List(ctx context.Context, filter domain.PartFilter) ([]domain.Part, error) {
+	filter = filter.Normalize()
+
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -91,10 +95,10 @@ func (r *PartRepository) ListAll(ctx context.Context) ([]domain.Part, error) {
 }
 
 func sortByName(parts []domain.Part) {
-	sort.Slice(parts, func(i, j int) bool {
-		if parts[i].Name != parts[j].Name {
-			return parts[i].Name < parts[j].Name
+	slices.SortFunc(parts, func(a, b domain.Part) int {
+		if c := cmp.Compare(a.Name, b.Name); c != 0 {
+			return c
 		}
-		return parts[i].ID.String() < parts[j].ID.String()
+		return bytes.Compare(a.ID[:], b.ID[:])
 	})
 }

@@ -205,6 +205,14 @@ func TestCalculateRestockPrioritiesTieBreakers(t *testing.T) {
 			},
 			want: []string{"Alpha", "beta"},
 		},
+		{
+			name: "scores that differ only by float noise still tie",
+			parts: []Part{
+				makePart("Noisy", 10, 10, 0.1, 3, 2),
+				makePart("Exact", 10, 10, 0.3, 1, 2),
+			},
+			want: []string{"Exact", "Noisy"},
+		},
 	}
 
 	for _, tt := range tests {

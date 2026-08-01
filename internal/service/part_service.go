@@ -50,5 +50,5 @@ func (s *PartService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Part, 
 }
 
 func (s *PartService) List(ctx context.Context, filter domain.PartFilter) ([]domain.Part, error) {
-	return s.repo.List(ctx, filter.Normalize())
+	return s.repo.List(ctx, filter)
 }

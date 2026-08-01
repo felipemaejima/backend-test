@@ -50,7 +50,7 @@ func TestConcurrentAccess(t *testing.T) {
 			if _, err := repo.FindByID(ctx, part.ID); err != nil {
 				t.Errorf("FindByID: %v", err)
 			}
-			if _, err := repo.List(ctx, domain.PartFilter{}.Normalize()); err != nil {
+			if _, err := repo.List(ctx, domain.PartFilter{}); err != nil {
 				t.Errorf("List: %v", err)
 			}
 		}(i)
@@ -58,7 +58,7 @@ func TestConcurrentAccess(t *testing.T) {
 
 	wg.Wait()
 
-	parts, err := repo.List(ctx, domain.PartFilter{Limit: domain.MaxListLimit}.Normalize())
+	parts, err := repo.List(ctx, domain.PartFilter{Limit: domain.MaxListLimit})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
