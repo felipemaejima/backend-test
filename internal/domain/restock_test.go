@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
@@ -272,5 +273,48 @@ func TestCalculateRestockPrioritiesAllHealthy(t *testing.T) {
 	priorities := CalculateRestockPriorities(parts)
 	if len(priorities) != 0 {
 		t.Errorf("expected 0 priorities, got %d (%v)", len(priorities), priorityNames(priorities))
+	}
+}
+
+func TestCalculateRestockPrioritiesIsFullyOrdered(t *testing.T) {
+	parts := benchmarkParts(2_000)
+
+	priorities := CalculateRestockPriorities(parts)
+	if len(priorities) == 0 {
+		t.Fatal("expected the sample to produce priorities")
+	}
+
+	for i := 1; i < len(priorities); i++ {
+		if comparePriorities(priorities[i-1], priorities[i]) > 0 {
+			t.Fatalf("position %d breaks the ordering: %+v came before %+v",
+				i, priorities[i-1].Part.Name, priorities[i].Part.Name)
+		}
+	}
+}
+
+func benchmarkParts(total int) []Part {
+	parts := make([]Part, 0, total)
+	for i := range total {
+		parts = append(parts, makePart(
+			fmt.Sprintf("Part %05d", i),
+			i%60-10,
+			20,
+			float64(i%7)/2,
+			i%15,
+			i%5+1,
+		))
+	}
+	return parts
+}
+
+func BenchmarkCalculateRestockPriorities(b *testing.B) {
+	for _, total := range []int{100, 1_000, 10_000} {
+		parts := benchmarkParts(total)
+		b.Run(fmt.Sprintf("%d-parts", total), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				CalculateRestockPriorities(parts)
+			}
+		})
 	}
 }
