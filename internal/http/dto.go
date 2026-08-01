@@ -71,3 +71,31 @@ func newPartListResponse(parts []domain.Part) partListResponse {
 	}
 	return partListResponse{Parts: items}
 }
+
+type restockPriorityResponse struct {
+	PartID         string  `json:"partId"`
+	Name           string  `json:"name"`
+	CurrentStock   int     `json:"currentStock"`
+	ProjectedStock float64 `json:"projectedStock"`
+	MinimumStock   int     `json:"minimumStock"`
+	UrgencyScore   float64 `json:"urgencyScore"`
+}
+
+type restockPrioritiesResponse struct {
+	Priorities []restockPriorityResponse `json:"priorities"`
+}
+
+func newRestockPrioritiesResponse(priorities []domain.RestockPriority) restockPrioritiesResponse {
+	items := make([]restockPriorityResponse, 0, len(priorities))
+	for _, priority := range priorities {
+		items = append(items, restockPriorityResponse{
+			PartID:         priority.Part.ID.String(),
+			Name:           priority.Part.Name,
+			CurrentStock:   priority.Part.CurrentStock,
+			ProjectedStock: priority.ProjectedStock,
+			MinimumStock:   priority.Part.MinimumStock,
+			UrgencyScore:   priority.UrgencyScore,
+		})
+	}
+	return restockPrioritiesResponse{Priorities: items}
+}

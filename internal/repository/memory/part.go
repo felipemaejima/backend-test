@@ -69,17 +69,32 @@ func (r *PartRepository) List(ctx context.Context, filter domain.PartFilter) ([]
 		}
 		filtered = append(filtered, part)
 	}
-
-	sort.Slice(filtered, func(i, j int) bool {
-		if filtered[i].Name != filtered[j].Name {
-			return filtered[i].Name < filtered[j].Name
-		}
-		return filtered[i].ID.String() < filtered[j].ID.String()
-	})
+	sortByName(filtered)
 
 	if filter.Offset >= len(filtered) {
 		return []domain.Part{}, nil
 	}
 	end := min(filter.Offset+filter.Limit, len(filtered))
 	return filtered[filter.Offset:end], nil
+}
+
+func (r *PartRepository) ListAll(ctx context.Context) ([]domain.Part, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	parts := make([]domain.Part, 0, len(r.parts))
+	for _, part := range r.parts {
+		parts = append(parts, part)
+	}
+	sortByName(parts)
+	return parts, nil
+}
+
+func sortByName(parts []domain.Part) {
+	sort.Slice(parts, func(i, j int) bool {
+		if parts[i].Name != parts[j].Name {
+			return parts[i].Name < parts[j].Name
+		}
+		return parts[i].ID.String() < parts[j].ID.String()
+	})
 }

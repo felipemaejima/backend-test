@@ -132,9 +132,23 @@ func (r *PartRepository) List(ctx context.Context, filter domain.PartFilter) ([]
 		return nil, err
 	}
 
+	return toDomainSlice(models), nil
+}
+
+func (r *PartRepository) ListAll(ctx context.Context) ([]domain.Part, error) {
+	var models []partModel
+	err := r.db.WithContext(ctx).Model(&partModel{}).Order("name, id").Find(&models).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return toDomainSlice(models), nil
+}
+
+func toDomainSlice(models []partModel) []domain.Part {
 	parts := make([]domain.Part, 0, len(models))
 	for _, model := range models {
 		parts = append(parts, model.toDomain())
 	}
-	return parts, nil
+	return parts
 }

@@ -1,4 +1,3 @@
-
 package http
 
 import (
@@ -9,7 +8,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/requestid"
 )
 
-func NewRouter(partHandler *PartHandler) *fiber.App {
+func NewRouter(partHandler *PartHandler, restockHandler *RestockHandler) *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName:               "restock-api",
 		DisableStartupMessage: true,
@@ -30,6 +29,9 @@ func NewRouter(partHandler *PartHandler) *fiber.App {
 	parts.Get("/:id", partHandler.GetByID)
 	parts.Put("/:id", partHandler.Update)
 	parts.Delete("/:id", partHandler.Delete)
+
+	restock := app.Group("/restock")
+	restock.Get("/priorities", restockHandler.Priorities)
 
 	return app
 }

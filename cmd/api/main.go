@@ -31,10 +31,14 @@ func main() {
 	}()
 
 	partRepository := postgres.NewPartRepository(db)
-	partService := service.NewPartService(partRepository)
-	partHandler := httpapi.NewPartHandler(partService)
 
-	app := httpapi.NewRouter(partHandler)
+	partService := service.NewPartService(partRepository)
+	restockService := service.NewRestockService(partRepository)
+
+	partHandler := httpapi.NewPartHandler(partService)
+	restockHandler := httpapi.NewRestockHandler(restockService)
+
+	app := httpapi.NewRouter(partHandler, restockHandler)
 
 	go func() {
 		slog.Info("servidor iniciado", "port", cfg.Port)

@@ -37,4 +37,5 @@ type PartRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	FindByID(ctx context.Context, id uuid.UUID) (*Part, error)
 	List(ctx context.Context, filter PartFilter) ([]Part, error)
+	ListAll(ctx context.Context) ([]Part, error)
 }
