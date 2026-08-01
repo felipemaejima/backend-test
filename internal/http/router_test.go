@@ -16,8 +16,11 @@ import (
 )
 
 func newTestApp() *fiber.App {
-	svc := service.NewPartService(memory.NewPartRepository())
-	return httpapi.NewRouter(httpapi.NewPartHandler(svc))
+	repo := memory.NewPartRepository()
+	return httpapi.NewRouter(
+		httpapi.NewPartHandler(service.NewPartService(repo)),
+		httpapi.NewRestockHandler(service.NewRestockService(repo)),
+	)
 }
 
 const validBody = `{

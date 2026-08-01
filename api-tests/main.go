@@ -49,6 +49,7 @@ func main() {
 	r.testValidation()
 	r.testRead(partID)
 	r.testList()
+	r.testRestock()
 	r.testUpdate(partID)
 	r.testDelete(partID)
 	r.testRoutes()
@@ -145,6 +146,49 @@ func (r *runner) testList() {
 	res = r.request(http.MethodGet, "/parts?category="+r.category+"&limit=abc&offset=xyz", "")
 	r.expectStatus(res, http.StatusOK, "invalid pagination falls back to defaults")
 	r.expectCount(res, 3, "full list with defaults")
+}
+
+func (r *runner) testRestock() {
+	r.section("Restock priorities")
+
+	res := r.request(http.MethodGet, "/restock/priorities", "")
+	r.expectStatus(res, http.StatusOK, "GET /restock/priorities")
+
+	if _, ok := res.body["priorities"].([]any); !ok {
+		r.check(false, "response carries a priorities array", "field is missing or not an array")
+		return
+	}
+
+	pastilha, ok := findPriority(res, "Pastilha Smoke")
+	r.check(ok, "part with negative stock is listed", "Pastilha Smoke not found in the priorities")
+	if ok {
+		r.checkNumber(pastilha, "projectedStock", -62, "projected stock = currentStock - avgSales*leadTime")
+		r.checkNumber(pastilha, "urgencyScore", 410, "urgency score = (minimumStock - projectedStock) * criticality")
+		r.checkNumber(pastilha, "currentStock", -42, "current stock echoed")
+		r.checkNumber(pastilha, "minimumStock", 20, "minimum stock echoed")
+		r.check(pastilha["partId"] != nil && pastilha["partId"] != "", "priority carries partId", "partId missing")
+	}
+
+	correia, okCorreia := findPriority(res, "Correia Smoke")
+	r.check(okCorreia, "second part below minimum is listed", "Correia Smoke not found in the priorities")
+	if okCorreia {
+		r.checkNumber(correia, "urgencyScore", 128, "urgency score for the second part")
+	}
+
+	filtro, okFiltro := findPriority(res, "Filtro Smoke")
+	r.check(okFiltro, "third part below minimum is listed", "Filtro Smoke not found in the priorities")
+	if okFiltro {
+		r.checkNumber(filtro, "urgencyScore", 75, "urgency score for the third part")
+	}
+
+	if ok && okCorreia && okFiltro {
+		r.check(indexOfPriority(res, "Pastilha Smoke") < indexOfPriority(res, "Correia Smoke") &&
+			indexOfPriority(res, "Correia Smoke") < indexOfPriority(res, "Filtro Smoke"),
+			"ordered by descending urgency score",
+			"expected Pastilha (410) before Correia (128) before Filtro (75)")
+	}
+
+	r.check(sortedByUrgency(res), "whole list is sorted by urgency score", "found a lower score before a higher one")
 }
 
 func (r *runner) testUpdate(partID string) {
@@ -306,6 +350,12 @@ func (r *runner) expectNames(res result, want []string, label string) {
 	r.check(equal(got, want), label, fmt.Sprintf("list = %v, expected %v", got, want))
 }
 
+func (r *runner) checkNumber(item map[string]any, key string, want float64, label string) {
+	got, ok := item[key].(float64)
+	r.check(ok && got == want, label,
+		fmt.Sprintf("field %q = %v, expected %v", key, item[key], want))
+}
+
 func (r *runner) section(title string) {
 	fmt.Printf("\n%s%s%s\n", bold, title, reset)
 }
@@ -350,6 +400,55 @@ func partNames(res result) []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+func priorityItems(res result) []map[string]any {
+	raw, ok := res.body["priorities"].([]any)
+	if !ok {
+		return nil
+	}
+	items := make([]map[string]any, 0, len(raw))
+	for _, entry := range raw {
+		item, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		items = append(items, item)
+	}
+	return items
+}
+
+func findPriority(res result, name string) (map[string]any, bool) {
+	for _, item := range priorityItems(res) {
+		if item["name"] == name {
+			return item, true
+		}
+	}
+	return nil, false
+}
+
+func indexOfPriority(res result, name string) int {
+	for i, item := range priorityItems(res) {
+		if item["name"] == name {
+			return i
+		}
+	}
+	return -1
+}
+
+func sortedByUrgency(res result) bool {
+	items := priorityItems(res)
+	for i := 1; i < len(items); i++ {
+		previous, okPrevious := items[i-1]["urgencyScore"].(float64)
+		current, okCurrent := items[i]["urgencyScore"].(float64)
+		if !okPrevious || !okCurrent {
+			return false
+		}
+		if current > previous {
+			return false
+		}
+	}
+	return true
 }
 
 func isEmptyArray(res result) bool {

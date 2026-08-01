@@ -3,6 +3,7 @@ package repositorytest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -26,6 +27,7 @@ func RunContract(t *testing.T, newRepo Factory) {
 	t.Run("ListFiltersByCategory", func(t *testing.T) { testListCategory(t, newRepo(t)) })
 	t.Run("ListPaginates", func(t *testing.T) { testListPagination(t, newRepo(t)) })
 	t.Run("ListOffsetBeyondEnd", func(t *testing.T) { testListOffsetBeyondEnd(t, newRepo(t)) })
+	t.Run("ListAllIgnoresPagination", func(t *testing.T) { testListAll(t, newRepo(t)) })
 }
 
 func testCreateAndFind(t *testing.T, repo domain.PartRepository) {
@@ -164,6 +166,29 @@ func testListOffsetBeyondEnd(t *testing.T, repo domain.PartRepository) {
 	}
 	if len(parts) != 0 {
 		t.Errorf("expected empty collection, got %d", len(parts))
+	}
+}
+
+func testListAll(t *testing.T, repo domain.PartRepository) {
+	ctx := context.Background()
+
+	const total = domain.DefaultListLimit + 10
+
+	items := make([]testPart, 0, total)
+	for i := range total {
+		items = append(items, testPart{fmt.Sprintf("Part %03d", i), "engine"})
+	}
+	seed(t, repo, items...)
+
+	parts, err := repo.ListAll(ctx)
+	if err != nil {
+		t.Fatalf("ListAll: %v", err)
+	}
+	if len(parts) != len(items) {
+		t.Fatalf("expected %d parts, got %d", len(items), len(parts))
+	}
+	if parts[0].Name != "Part 000" {
+		t.Errorf("first part = %q, expected name ordering", parts[0].Name)
 	}
 }
 
