@@ -8,7 +8,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/requestid"
 )
 
-func NewRouter(partHandler *PartHandler, restockHandler *RestockHandler) *fiber.App {
+func NewRouter(partHandler *PartHandler, restockHandler *RestockHandler, healthHandler *HealthHandler) *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName:               "restock-api",
 		DisableStartupMessage: true,
@@ -19,9 +19,7 @@ func NewRouter(partHandler *PartHandler, restockHandler *RestockHandler) *fiber.
 
 	app.Use(requestid.New(), recovermw.New())
 
-	app.Get("/health", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{"status": "ok"})
-	})
+	app.Get("/health", healthHandler.Health)
 
 	parts := app.Group("/parts")
 	parts.Post("/", partHandler.Create)
