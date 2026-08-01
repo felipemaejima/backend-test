@@ -27,6 +27,8 @@ func RunContract(t *testing.T, newRepo Factory) {
 	t.Run("ListFiltersByCategory", func(t *testing.T) { testListCategory(t, newRepo(t)) })
 	t.Run("ListPaginates", func(t *testing.T) { testListPagination(t, newRepo(t)) })
 	t.Run("ListOffsetBeyondEnd", func(t *testing.T) { testListOffsetBeyondEnd(t, newRepo(t)) })
+	t.Run("ListAppliesDefaultLimit", func(t *testing.T) { testListDefaultLimit(t, newRepo(t)) })
+	t.Run("ListClampsLimitToMaximum", func(t *testing.T) { testListMaxLimit(t, newRepo(t)) })
 	t.Run("ListAllIgnoresPagination", func(t *testing.T) { testListAll(t, newRepo(t)) })
 }
 
@@ -118,7 +120,7 @@ func testListOrder(t *testing.T, repo domain.PartRepository) {
 		testPart{"Filtro de Óleo X", "engine"},
 	)
 
-	parts, err := repo.List(ctx, domain.PartFilter{}.Normalize())
+	parts, err := repo.List(ctx, domain.PartFilter{})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -135,7 +137,7 @@ func testListCategory(t *testing.T, repo domain.PartRepository) {
 		testPart{"Pastilha de Freio Y", "brakes"},
 	)
 
-	parts, err := repo.List(ctx, domain.PartFilter{Category: "engine"}.Normalize())
+	parts, err := repo.List(ctx, domain.PartFilter{Category: "engine"})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -149,7 +151,7 @@ func testListPagination(t *testing.T, repo domain.PartRepository) {
 		testPart{"D", "engine"}, testPart{"E", "engine"},
 	)
 
-	parts, err := repo.List(ctx, domain.PartFilter{Limit: 2, Offset: 2}.Normalize())
+	parts, err := repo.List(ctx, domain.PartFilter{Limit: 2, Offset: 2})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -160,7 +162,7 @@ func testListOffsetBeyondEnd(t *testing.T, repo domain.PartRepository) {
 	ctx := context.Background()
 	seed(t, repo, testPart{"A", "engine"})
 
-	parts, err := repo.List(ctx, domain.PartFilter{Limit: 10, Offset: 99}.Normalize())
+	parts, err := repo.List(ctx, domain.PartFilter{Limit: 10, Offset: 99})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -169,23 +171,44 @@ func testListOffsetBeyondEnd(t *testing.T, repo domain.PartRepository) {
 	}
 }
 
+func testListDefaultLimit(t *testing.T, repo domain.PartRepository) {
+	ctx := context.Background()
+	seedMany(t, repo, domain.DefaultListLimit+10)
+
+	parts, err := repo.List(ctx, domain.PartFilter{})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(parts) != domain.DefaultListLimit {
+		t.Errorf("expected %d parts, got %d", domain.DefaultListLimit, len(parts))
+	}
+}
+
+func testListMaxLimit(t *testing.T, repo domain.PartRepository) {
+	ctx := context.Background()
+	seedMany(t, repo, 10)
+
+	parts, err := repo.List(ctx, domain.PartFilter{Limit: domain.MaxListLimit * 100})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(parts) != 10 {
+		t.Errorf("expected 10 parts, got %d", len(parts))
+	}
+}
+
 func testListAll(t *testing.T, repo domain.PartRepository) {
 	ctx := context.Background()
 
 	const total = domain.DefaultListLimit + 10
-
-	items := make([]testPart, 0, total)
-	for i := range total {
-		items = append(items, testPart{fmt.Sprintf("Part %03d", i), "engine"})
-	}
-	seed(t, repo, items...)
+	seedMany(t, repo, total)
 
 	parts, err := repo.ListAll(ctx)
 	if err != nil {
 		t.Fatalf("ListAll: %v", err)
 	}
-	if len(parts) != len(items) {
-		t.Fatalf("expected %d parts, got %d", len(items), len(parts))
+	if len(parts) != total {
+		t.Fatalf("expected %d parts, got %d", total, len(parts))
 	}
 	if parts[0].Name != "Part 000" {
 		t.Errorf("first part = %q, expected name ordering", parts[0].Name)
@@ -193,6 +216,15 @@ func testListAll(t *testing.T, repo domain.PartRepository) {
 }
 
 type testPart struct{ name, category string }
+
+func seedMany(t *testing.T, repo domain.PartRepository, total int) {
+	t.Helper()
+	items := make([]testPart, 0, total)
+	for i := range total {
+		items = append(items, testPart{fmt.Sprintf("Part %03d", i), "engine"})
+	}
+	seed(t, repo, items...)
+}
 
 func seed(t *testing.T, repo domain.PartRepository, items ...testPart) {
 	t.Helper()
