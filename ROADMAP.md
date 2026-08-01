@@ -109,15 +109,17 @@ Em caso de empate no `urgencyScore`, aplicar:
 
 ---
 
-# Decisões de implementação
- - Clean Archtecture (a decidir) ou Hexagonal
- - Golang
-
 ### Testes
 - Testes unitários do cálculo de prioridade
 - Testes de cenários extremos (estoque negativo, venda zero, lead time alto)
 
-
 # TODO
+
+ - Montar o ambiente em docker 
+ - Definir a estrutura da aplicação (go)
+ - migrations
+ - documentação
+ - testes
+ - seed 
  - Subir a aplicação para exemplificar a usabilidade (se sobrar tempo)
  - Detalhar o uso de IA
