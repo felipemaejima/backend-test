@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/felipemaejima/backend-test/internal/domain"
@@ -59,15 +60,15 @@ func TestRestockPriorities(t *testing.T) {
 	}
 }
 
-func TestRestockPrioritiesIgnoresPaginationLimit(t *testing.T) {
+func TestRestockPrioritiesIgnoresPaginationLimits(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewPartRepository()
 	parts := service.NewPartService(repo)
 	restock := service.NewRestockService(repo)
 
-	total := domain.DefaultListLimit + 10
+	total := domain.MaxListLimit + 10
 	for i := range total {
-		seedPart(t, parts, string(rune('a'+i%26))+string(rune('a'+i/26)), 0, 10, 1, 1, 3)
+		seedPart(t, parts, fmt.Sprintf("Part %04d", i), 0, 10, 1, 1, 3)
 	}
 
 	priorities, err := restock.Priorities(ctx)

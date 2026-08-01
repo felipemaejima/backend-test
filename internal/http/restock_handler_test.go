@@ -98,6 +98,28 @@ func TestRestockPrioritiesEmptyReturnsEmptyArray(t *testing.T) {
 	}
 }
 
+func TestRestockPrioritiesRoundsFloatNoise(t *testing.T) {
+	app := newTestApp()
+	createPartWithStock(t, app, "Noisy", 10, 10, 0.1, 3, 2)
+
+	status, body := do(t, app, http.MethodGet, "/restock/priorities", "")
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, expected 200", status)
+	}
+
+	items := priorities(t, body)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 priority, got %d", len(items))
+	}
+
+	if items[0]["projectedStock"] != 9.7 {
+		t.Errorf("projectedStock = %v, expected 9.7", items[0]["projectedStock"])
+	}
+	if items[0]["urgencyScore"] != 0.6 {
+		t.Errorf("urgencyScore = %v, expected 0.6", items[0]["urgencyScore"])
+	}
+}
+
 func TestRestockPrioritiesOnlyIncludesPartsBelowMinimum(t *testing.T) {
 	app := newTestApp()
 	createPartWithStock(t, app, "Exactly At Minimum", 30, 10, 2, 10, 3)
