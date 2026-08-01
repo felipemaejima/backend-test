@@ -1,10 +1,17 @@
 package http
 
 import (
+	"math"
 	"time"
 
 	"github.com/felipemaejima/backend-test/internal/domain"
 )
+
+const responseDecimalFactor = 1e4
+
+func round(value float64) float64 {
+	return math.Round(value*responseDecimalFactor) / responseDecimalFactor
+}
 
 type partRequest struct {
 	Name              string  `json:"name"`
@@ -92,9 +99,9 @@ func newRestockPrioritiesResponse(priorities []domain.RestockPriority) restockPr
 			PartID:         priority.Part.ID.String(),
 			Name:           priority.Part.Name,
 			CurrentStock:   priority.Part.CurrentStock,
-			ProjectedStock: priority.ProjectedStock,
+			ProjectedStock: round(priority.ProjectedStock),
 			MinimumStock:   priority.Part.MinimumStock,
-			UrgencyScore:   priority.UrgencyScore,
+			UrgencyScore:   round(priority.UrgencyScore),
 		})
 	}
 	return restockPrioritiesResponse{Priorities: items}
