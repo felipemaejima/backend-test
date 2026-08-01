@@ -119,7 +119,8 @@ Em caso de empate no `urgencyScore`, aplicar:
  - Definir a estrutura da aplicação (go)
  - migrations
  - documentação
+ - logs
  - testes
  - seed 
- - Subir a aplicação para exemplificar a usabilidade (se sobrar tempo)
  - Detalhar o uso de IA
+ - Subir a aplicação para exemplificar a usabilidade (se sobrar tempo)
