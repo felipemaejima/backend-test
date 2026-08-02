@@ -179,6 +179,28 @@ func (r *runner) testList() {
 	r.expectPagination(res, "perPage", 500, "n is clamped to the maximum")
 }
 
+const maxPriorityPages = 50
+
+func (r *runner) allPriorities() ([]map[string]any, bool) {
+	queue := make([]map[string]any, 0)
+
+	for page := 1; page <= maxPriorityPages; page++ {
+		res := r.request(http.MethodGet,
+			fmt.Sprintf("/restock/priorities?n=500&page=%d", page), "")
+		if res.err != nil || res.status != http.StatusOK {
+			return queue, false
+		}
+
+		items := priorityItems(res)
+		if len(items) == 0 {
+			return queue, true
+		}
+		queue = append(queue, items...)
+	}
+
+	return queue, false
+}
+
 func (r *runner) testRestock() {
 	r.section("Restock priorities")
 
@@ -190,7 +212,15 @@ func (r *runner) testRestock() {
 		return
 	}
 
-	pastilha, ok := findPriority(res, "Pastilha Smoke")
+	queue, complete := r.allPriorities()
+	r.check(complete, "walks the whole priority queue", "pagination did not terminate")
+
+	total, hasTotal := paginationNumber(res, "total")
+	r.check(hasTotal && len(queue) == int(total),
+		"walking every page yields exactly the reported total",
+		fmt.Sprintf("walked %d items, pagination reports %v", len(queue), total))
+
+	pastilha, ok := findPriority(queue, "Pastilha Smoke")
 	r.check(ok, "part with negative stock is listed", "Pastilha Smoke not found in the priorities")
 	if ok {
 		r.checkNumber(pastilha, "projectedStock", -62, "projected stock = currentStock - avgSales*leadTime")
@@ -200,30 +230,27 @@ func (r *runner) testRestock() {
 		r.check(pastilha["partId"] != nil && pastilha["partId"] != "", "priority carries partId", "partId missing")
 	}
 
-	correia, okCorreia := findPriority(res, "Correia Smoke")
+	correia, okCorreia := findPriority(queue, "Correia Smoke")
 	r.check(okCorreia, "second part below minimum is listed", "Correia Smoke not found in the priorities")
 	if okCorreia {
 		r.checkNumber(correia, "urgencyScore", 128, "urgency score for the second part")
 	}
 
-	filtro, okFiltro := findPriority(res, "Filtro Smoke")
+	filtro, okFiltro := findPriority(queue, "Filtro Smoke")
 	r.check(okFiltro, "third part below minimum is listed", "Filtro Smoke not found in the priorities")
 	if okFiltro {
 		r.checkNumber(filtro, "urgencyScore", 75, "urgency score for the third part")
 	}
 
 	if ok && okCorreia && okFiltro {
-		r.check(indexOfPriority(res, "Pastilha Smoke") < indexOfPriority(res, "Correia Smoke") &&
-			indexOfPriority(res, "Correia Smoke") < indexOfPriority(res, "Filtro Smoke"),
+		r.check(indexOfPriority(queue, "Pastilha Smoke") < indexOfPriority(queue, "Correia Smoke") &&
+			indexOfPriority(queue, "Correia Smoke") < indexOfPriority(queue, "Filtro Smoke"),
 			"ordered by descending urgency score",
 			"expected Pastilha (410) before Correia (128) before Filtro (75)")
 	}
 
-	r.check(sortedByUrgency(res), "whole list is sorted by urgency score", "found a lower score before a higher one")
-
-	total, ok := paginationNumber(res, "total")
-	r.check(ok && total >= 3, "pagination total covers at least this run's parts",
-		fmt.Sprintf("total = %v, expected at least 3", total))
+	r.check(sortedByUrgency(queue), "whole queue is sorted by urgency score, across pages",
+		"found a lower score before a higher one")
 
 	res = r.request(http.MethodGet, "/restock/priorities?n=1", "")
 	r.expectStatus(res, http.StatusOK, "GET /restock/priorities?n=1")
@@ -491,8 +518,8 @@ func priorityItems(res result) []map[string]any {
 	return items
 }
 
-func findPriority(res result, name string) (map[string]any, bool) {
-	for _, item := range priorityItems(res) {
+func findPriority(queue []map[string]any, name string) (map[string]any, bool) {
+	for _, item := range queue {
 		if item["name"] == name {
 			return item, true
 		}
@@ -500,8 +527,8 @@ func findPriority(res result, name string) (map[string]any, bool) {
 	return nil, false
 }
 
-func indexOfPriority(res result, name string) int {
-	for i, item := range priorityItems(res) {
+func indexOfPriority(queue []map[string]any, name string) int {
+	for i, item := range queue {
 		if item["name"] == name {
 			return i
 		}
@@ -509,8 +536,7 @@ func indexOfPriority(res result, name string) int {
 	return -1
 }
 
-func sortedByUrgency(res result) bool {
-	items := priorityItems(res)
+func sortedByUrgency(items []map[string]any) bool {
 	for i := 1; i < len(items); i++ {
 		previous, okPrevious := items[i-1]["urgencyScore"].(float64)
 		current, okCurrent := items[i]["urgencyScore"].(float64)
