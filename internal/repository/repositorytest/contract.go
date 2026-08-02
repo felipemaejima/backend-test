@@ -30,6 +30,78 @@ func RunContract(t *testing.T, newRepo Factory) {
 	t.Run("ListAppliesDefaultLimit", func(t *testing.T) { testListDefaultLimit(t, newRepo(t)) })
 	t.Run("ListClampsLimitToMaximum", func(t *testing.T) { testListMaxLimit(t, newRepo(t)) })
 	t.Run("ListAllIgnoresPagination", func(t *testing.T) { testListAll(t, newRepo(t)) })
+	t.Run("PaginationVisitsEveryPartOnce", func(t *testing.T) { testPaginationVisitsEveryPartOnce(t, newRepo(t)) })
+	t.Run("PaginationSurvivesDuplicateNames", func(t *testing.T) { testPaginationDuplicateNames(t, newRepo(t)) })
+}
+
+const maxPagesGuard = 200
+
+func collectAllPages(t *testing.T, repo domain.PartRepository, size int) []domain.Part {
+	t.Helper()
+	ctx := context.Background()
+
+	collected := make([]domain.Part, 0)
+	for number := 1; number <= maxPagesGuard; number++ {
+		page, err := repo.List(ctx, domain.PartFilter{
+			Page: domain.PageRequest{Number: number, Size: size},
+		})
+		if err != nil {
+			t.Fatalf("List(page %d): %v", number, err)
+		}
+		if len(page.Items) == 0 {
+			return collected
+		}
+		if len(page.Items) > size {
+			t.Fatalf("page %d returned %d items, above the requested size of %d",
+				number, len(page.Items), size)
+		}
+		collected = append(collected, page.Items...)
+	}
+
+	t.Fatalf("pagination did not terminate after %d pages", maxPagesGuard)
+	return nil
+}
+
+func assertVisitedExactlyOnce(t *testing.T, parts []domain.Part, want int) {
+	t.Helper()
+
+	seen := make(map[uuid.UUID]int, want)
+	for _, part := range parts {
+		seen[part.ID]++
+	}
+
+	if len(parts) != want {
+		t.Errorf("walking every page yielded %d items, expected %d", len(parts), want)
+	}
+
+	for id, count := range seen {
+		if count > 1 {
+			t.Errorf("part %s appeared on %d different pages", id, count)
+		}
+	}
+	if missing := want - len(seen); missing > 0 {
+		t.Errorf("%d part(s) never appeared on any page", missing)
+	}
+}
+
+func testPaginationVisitsEveryPartOnce(t *testing.T, repo domain.PartRepository) {
+	const total = 47
+	seedMany(t, repo, total)
+
+	assertVisitedExactlyOnce(t, collectAllPages(t, repo, 10), total)
+}
+
+func testPaginationDuplicateNames(t *testing.T, repo domain.PartRepository) {
+	ctx := context.Background()
+	const total = 20
+
+	for range total {
+		if err := repo.Create(ctx, newPart(t, "Peça Repetida", "engine")); err != nil {
+			t.Fatalf("seeding: %v", err)
+		}
+	}
+
+	assertVisitedExactlyOnce(t, collectAllPages(t, repo, 3), total)
 }
 
 func testCreateAndFind(t *testing.T, repo domain.PartRepository) {

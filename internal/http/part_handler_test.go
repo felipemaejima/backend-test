@@ -153,6 +153,85 @@ func TestListPaginationCountsOnlyTheFilteredCategory(t *testing.T) {
 	})
 }
 
+func TestPaginationVisitsEveryPartOnce(t *testing.T) {
+	app := newTestApp()
+
+	const total = 25
+	for i := range total {
+		createPart(t, app, fmt.Sprintf("Peça %02d", i), "engine")
+	}
+
+	seen := make(map[string]int, total)
+	collected := 0
+
+	for page := 1; page <= total+1; page++ {
+		_, body := do(t, app, http.MethodGet, fmt.Sprintf("/parts?n=7&page=%d", page), "")
+
+		items, ok := body["parts"].([]any)
+		if !ok {
+			t.Fatalf("page %d: parts = %v, expected an array", page, body["parts"])
+		}
+		if len(items) == 0 {
+			break
+		}
+
+		for _, item := range items {
+			part, ok := item.(map[string]any)
+			if !ok {
+				t.Fatalf("page %d: list item = %v, expected an object", page, item)
+			}
+			id, _ := part["id"].(string)
+			seen[id]++
+			collected++
+		}
+	}
+
+	if collected != total {
+		t.Errorf("walking every page yielded %d items, expected %d", collected, total)
+	}
+	for id, count := range seen {
+		if count > 1 {
+			t.Errorf("part %s appeared on %d different pages", id, count)
+		}
+	}
+	if missing := total - len(seen); missing > 0 {
+		t.Errorf("%d part(s) never appeared on any page", missing)
+	}
+}
+
+func TestPaginationSurvivesDuplicateNames(t *testing.T) {
+	app := newTestApp()
+
+	const total = 12
+	for range total {
+		createPart(t, app, "Peça Repetida", "engine")
+	}
+
+	seen := make(map[string]int, total)
+	for page := 1; page <= total+1; page++ {
+		_, body := do(t, app, http.MethodGet, fmt.Sprintf("/parts?n=5&page=%d", page), "")
+
+		items, _ := body["parts"].([]any)
+		if len(items) == 0 {
+			break
+		}
+		for _, item := range items {
+			part, _ := item.(map[string]any)
+			id, _ := part["id"].(string)
+			seen[id]++
+		}
+	}
+
+	if len(seen) != total {
+		t.Errorf("saw %d distinct parts, expected %d", len(seen), total)
+	}
+	for id, count := range seen {
+		if count > 1 {
+			t.Errorf("part %s appeared on %d different pages", id, count)
+		}
+	}
+}
+
 func TestListPaginationClampsPageSize(t *testing.T) {
 	app := newTestApp()
 	createPart(t, app, "A", "engine")
