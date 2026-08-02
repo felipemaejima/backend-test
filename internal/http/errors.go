@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"errors"
 
 	"github.com/gofiber/fiber/v2"
@@ -24,6 +25,12 @@ func errorHandler(c *fiber.Ctx, err error) error {
 
 	if errors.Is(err, domain.ErrPartNotFound) {
 		return c.Status(fiber.StatusNotFound).JSON(errorResponse{Error: err.Error()})
+	}
+
+	if errors.Is(err, context.DeadlineExceeded) {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(errorResponse{
+			Error: "tempo de resposta excedido",
+		})
 	}
 
 	var fiberErr *fiber.Error

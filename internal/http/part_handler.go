@@ -25,7 +25,7 @@ func (h *PartHandler) Create(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "corpo da requisição inválido")
 	}
 
-	part, err := h.service.Create(c.Context(), req.toInput())
+	part, err := h.service.Create(c.UserContext(), req.toInput())
 	if err != nil {
 		return err
 	}
@@ -40,7 +40,7 @@ func (h *PartHandler) List(c *fiber.Ctx) error {
 		Page:     pageRequest(c),
 	}
 
-	page, err := h.service.List(c.Context(), filter)
+	page, err := h.service.List(c.UserContext(), filter)
 	if err != nil {
 		return err
 	}
@@ -55,7 +55,7 @@ func (h *PartHandler) GetByID(c *fiber.Ctx) error {
 		return err
 	}
 
-	part, err := h.service.GetByID(c.Context(), id)
+	part, err := h.service.GetByID(c.UserContext(), id)
 	if err != nil {
 		return err
 	}
@@ -75,7 +75,7 @@ func (h *PartHandler) Update(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "corpo da requisição inválido")
 	}
 
-	part, err := h.service.Update(c.Context(), id, req.toInput())
+	part, err := h.service.Update(c.UserContext(), id, req.toInput())
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func (h *PartHandler) Delete(c *fiber.Ctx) error {
 		return err
 	}
 
-	if err := h.service.Delete(c.Context(), id); err != nil {
+	if err := h.service.Delete(c.UserContext(), id); err != nil {
 		return err
 	}
 

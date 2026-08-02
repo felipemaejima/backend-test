@@ -20,7 +20,7 @@ func NewHealthHandler(check HealthChecker) *HealthHandler {
 }
 
 func (h *HealthHandler) Health(c *fiber.Ctx) error {
-	ctx, cancel := context.WithTimeout(c.Context(), healthCheckTimeout)
+	ctx, cancel := context.WithTimeout(c.UserContext(), healthCheckTimeout)
 	defer cancel()
 
 	if err := h.check(ctx); err != nil {

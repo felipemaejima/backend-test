@@ -10,7 +10,11 @@ import (
 	"github.com/google/uuid"
 )
 
-const healthPath = "/health"
+const (
+	healthPath = "/health"
+
+	requestTimeoutLimit = 10 * time.Second
+)
 
 type RouterConfig struct {
 	Part    *PartHandler
@@ -29,7 +33,7 @@ func NewRouter(cfg RouterConfig) *fiber.App {
 		AppName:               "restock-api",
 		DisableStartupMessage: true,
 		ReadTimeout:           10 * time.Second,
-		WriteTimeout:          10 * time.Second,
+		WriteTimeout:          15 * time.Second,
 		ErrorHandler:          errorHandler,
 	})
 
@@ -37,6 +41,7 @@ func NewRouter(cfg RouterConfig) *fiber.App {
 		requestid.New(requestid.Config{Generator: uuid.NewString}),
 		requestLogger(log),
 		recovermw.New(),
+		requestTimeout(requestTimeoutLimit),
 	)
 
 	app.Get(healthPath, cfg.Health.Health)
