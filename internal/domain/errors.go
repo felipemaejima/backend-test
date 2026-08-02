@@ -22,7 +22,6 @@ func (e *ValidationError) Error() string {
 	for _, f := range e.Fields {
 		parts = append(parts, fmt.Sprintf("%s: %s", f.Field, f.Message))
 	}
-	// todo melhorar
 	return "validação falhou - " + strings.Join(parts, "; ")
 }
 

@@ -1,6 +1,6 @@
 COMPOSE := docker compose
 
-.PHONY: help up down down-v logs restart test test-api cover ci fmt-check migrate-up migrate-down migrate-create tidy fmt vet build sh psql
+.PHONY: help up down down-v logs restart seed test test-api cover ci fmt-check migrate-up migrate-down migrate-create tidy fmt vet build sh psql
 
 help: ## Lista os comandos disponíveis
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -23,6 +23,9 @@ restart: ## Reinicia a API
 
 test: ## Testes unitários (sem banco, com -race)
 	$(COMPOSE) run --rm --no-deps test
+
+seed: ## Popula o banco com um catálogo de exemplo (idempotente)
+	$(COMPOSE) run --rm seed
 
 test-api: ## Requisições reais contra a API rodando (exige `make up` antes)
 	$(COMPOSE) run --rm --no-deps -e BASE_URL=$${BASE_URL:-http://api:8080} test go run ./api-tests

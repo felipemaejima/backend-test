@@ -64,6 +64,30 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  seed:
+    build:
+      context: .
+      target: dev
+    profiles: ["tools"]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-restock}
+      DB_PASSWORD: ${DB_PASSWORD:-restock}
+      DB_NAME: ${DB_NAME:-restock}
+      DB_SSLMODE: disable
+      LOG_FORMAT: text
+    volumes:
+      - .:/app
+      - gomodcache:/go/pkg/mod
+      - gobuildcache:/root/.cache/go-build
+    command: ["go", "run", "./cmd/seed"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
   test:
     build:
       context: .
