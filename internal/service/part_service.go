@@ -49,6 +49,6 @@ func (s *PartService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Part, 
 	return s.repo.FindByID(ctx, id)
 }
 
-func (s *PartService) List(ctx context.Context, filter domain.PartFilter) ([]domain.Part, error) {
+func (s *PartService) List(ctx context.Context, filter domain.PartFilter) (domain.Page[domain.Part], error) {
 	return s.repo.List(ctx, filter)
 }

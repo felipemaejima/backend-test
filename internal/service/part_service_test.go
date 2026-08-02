@@ -58,12 +58,12 @@ func TestCreateInvalidDoesNotPersist(t *testing.T) {
 		t.Fatal("expected validation error")
 	}
 
-	parts, err := svc.List(ctx, domain.PartFilter{})
+	page, err := svc.List(ctx, domain.PartFilter{})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(parts) != 0 {
-		t.Errorf("expected empty repository, got %d part(s)", len(parts))
+	if len(page.Items) != 0 {
+		t.Errorf("expected empty repository, got %d part(s)", len(page.Items))
 	}
 }
 
@@ -183,23 +183,26 @@ func TestListFilterByCategory(t *testing.T) {
 		}
 	}
 
-	parts, err := svc.List(ctx, domain.PartFilter{Category: "ENGINE"})
+	page, err := svc.List(ctx, domain.PartFilter{Category: "ENGINE"})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(parts) != 2 {
-		t.Fatalf("expected 2 engine parts, got %d", len(parts))
+	if len(page.Items) != 2 {
+		t.Fatalf("expected 2 engine parts, got %d", len(page.Items))
 	}
-	if parts[0].Name != "Correia Dentada Z" {
-		t.Errorf("first part = %q, expected name ordering", parts[0].Name)
+	if page.Items[0].Name != "Correia Dentada Z" {
+		t.Errorf("first part = %q, expected name ordering", page.Items[0].Name)
+	}
+	if page.Total != 2 {
+		t.Errorf("Total = %d, expected the filtered count", page.Total)
 	}
 
 	all, err := svc.List(ctx, domain.PartFilter{})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(all) != 3 {
-		t.Errorf("expected 3 parts without filter, got %d", len(all))
+	if len(all.Items) != 3 {
+		t.Errorf("expected 3 parts without filter, got %d", len(all.Items))
 	}
 }
 
@@ -215,22 +218,35 @@ func TestListPagination(t *testing.T) {
 		}
 	}
 
-	page, err := svc.List(ctx, domain.PartFilter{Limit: 2, Offset: 2})
+	page, err := svc.List(ctx, domain.PartFilter{
+		Page: domain.PageRequest{Number: 2, Size: 2},
+	})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(page) != 2 {
-		t.Fatalf("expected 2 parts in the page, got %d", len(page))
+	if len(page.Items) != 2 {
+		t.Fatalf("expected 2 parts in the page, got %d", len(page.Items))
 	}
-	if page[0].Name != "C" || page[1].Name != "D" {
-		t.Errorf("page = [%s %s], expected [C D]", page[0].Name, page[1].Name)
+	if page.Items[0].Name != "C" || page.Items[1].Name != "D" {
+		t.Errorf("page = [%s %s], expected [C D]", page.Items[0].Name, page.Items[1].Name)
+	}
+	if page.Total != 5 || page.TotalPages() != 3 {
+		t.Errorf("total = %d, pages = %d; expected 5 and 3", page.Total, page.TotalPages())
+	}
+	if !page.HasNext() || !page.HasPrevious() {
+		t.Error("expected both next and previous on the middle page")
 	}
 
-	empty, err := svc.List(ctx, domain.PartFilter{Limit: 10, Offset: 99})
+	empty, err := svc.List(ctx, domain.PartFilter{
+		Page: domain.PageRequest{Number: 99, Size: 10},
+	})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(empty) != 0 {
-		t.Errorf("expected empty page, got %d", len(empty))
+	if len(empty.Items) != 0 {
+		t.Errorf("expected empty page, got %d", len(empty.Items))
+	}
+	if empty.Total != 5 {
+		t.Errorf("Total = %d, expected the real count even on an empty page", empty.Total)
 	}
 }

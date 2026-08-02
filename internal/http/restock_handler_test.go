@@ -86,6 +86,46 @@ func TestRestockPriorities(t *testing.T) {
 	if items[1]["name"] != "Moderate" {
 		t.Errorf("second = %v, expected Moderate", items[1]["name"])
 	}
+
+	// A peça saudável não entra na fila, então o total é 2 e não 3.
+	assertPagination(t, body, map[string]any{
+		"page":        float64(1),
+		"perPage":     float64(50),
+		"total":       float64(2),
+		"totalPages":  float64(1),
+		"hasNext":     false,
+		"hasPrevious": false,
+	})
+}
+
+func TestRestockPrioritiesPaginates(t *testing.T) {
+	app := newTestApp()
+	createPartWithStock(t, app, "Critical", -42, 20, 4, 5, 5)
+	createPartWithStock(t, app, "Moderate", 8, 20, 4, 5, 4)
+	createPartWithStock(t, app, "Mild", 15, 20, 4, 5, 3)
+
+	status, body := do(t, app, http.MethodGet, "/restock/priorities?n=2&page=2", "")
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, expected 200", status)
+	}
+
+	items := priorities(t, body)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item on the last page, got %d", len(items))
+	}
+	// A paginação recorta a lista já ordenada por urgência.
+	if items[0]["name"] != "Mild" {
+		t.Errorf("name = %v, expected the least urgent part last", items[0]["name"])
+	}
+
+	assertPagination(t, body, map[string]any{
+		"page":        float64(2),
+		"perPage":     float64(2),
+		"total":       float64(3),
+		"totalPages":  float64(2),
+		"hasNext":     false,
+		"hasPrevious": true,
+	})
 }
 
 func TestRestockPrioritiesEmptyReturnsEmptyArray(t *testing.T) {
@@ -96,6 +136,12 @@ func TestRestockPrioritiesEmptyReturnsEmptyArray(t *testing.T) {
 	if items := priorities(t, body); len(items) != 0 {
 		t.Errorf("expected empty array, got %d items", len(items))
 	}
+	assertPagination(t, body, map[string]any{
+		"total":       float64(0),
+		"totalPages":  float64(0),
+		"hasNext":     false,
+		"hasPrevious": false,
+	})
 }
 
 func TestRestockPrioritiesRoundsFloatNoise(t *testing.T) {

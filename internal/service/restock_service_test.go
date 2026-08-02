@@ -28,6 +28,10 @@ func seedPart(t *testing.T, svc *service.PartService, name string, currentStock,
 	}
 }
 
+func allPages() domain.PageRequest {
+	return domain.PageRequest{Number: 1, Size: domain.MaxPageSize}
+}
+
 func TestRestockPriorities(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewPartRepository()
@@ -38,56 +42,109 @@ func TestRestockPriorities(t *testing.T) {
 	seedPart(t, parts, "Critical", -42, 20, 4, 5, 5)
 	seedPart(t, parts, "Moderate", 8, 20, 4, 5, 4)
 
-	priorities, err := restock.Priorities(ctx)
+	page, err := restock.Priorities(ctx, allPages())
 	if err != nil {
 		t.Fatalf("Priorities: %v", err)
 	}
 
-	if len(priorities) != 2 {
-		t.Fatalf("expected 2 priorities, got %d", len(priorities))
+	if len(page.Items) != 2 {
+		t.Fatalf("expected 2 priorities, got %d", len(page.Items))
 	}
-	if priorities[0].Part.Name != "Critical" {
-		t.Errorf("first = %q, expected Critical", priorities[0].Part.Name)
+	// A peça saudável não entra na fila, então não conta no total.
+	if page.Total != 2 {
+		t.Errorf("Total = %d, expected 2", page.Total)
 	}
-	if priorities[1].Part.Name != "Moderate" {
-		t.Errorf("second = %q, expected Moderate", priorities[1].Part.Name)
+	if page.Items[0].Part.Name != "Critical" {
+		t.Errorf("first = %q, expected Critical", page.Items[0].Part.Name)
 	}
-	if priorities[0].UrgencyScore != 410 {
-		t.Errorf("UrgencyScore = %v, expected 410", priorities[0].UrgencyScore)
+	if page.Items[1].Part.Name != "Moderate" {
+		t.Errorf("second = %q, expected Moderate", page.Items[1].Part.Name)
 	}
-	if priorities[0].ProjectedStock != -62 {
-		t.Errorf("ProjectedStock = %v, expected -62", priorities[0].ProjectedStock)
+	if page.Items[0].UrgencyScore != 410 {
+		t.Errorf("UrgencyScore = %v, expected 410", page.Items[0].UrgencyScore)
+	}
+	if page.Items[0].ProjectedStock != -62 {
+		t.Errorf("ProjectedStock = %v, expected -62", page.Items[0].ProjectedStock)
 	}
 }
 
-func TestRestockPrioritiesIgnoresPaginationLimits(t *testing.T) {
+func TestRestockPrioritiesPaginates(t *testing.T) {
 	ctx := context.Background()
 	repo := memory.NewPartRepository()
 	parts := service.NewPartService(repo)
 	restock := service.NewRestockService(repo)
 
-	total := domain.MaxListLimit + 10
+	// Criticidade crescente com o índice mantém a ordem por urgência previsível.
+	for i := range 7 {
+		seedPart(t, parts, fmt.Sprintf("Part %d", i), 0, 10, 1, 1, i%5+1)
+	}
+
+	page, err := restock.Priorities(ctx, domain.PageRequest{Number: 2, Size: 3})
+	if err != nil {
+		t.Fatalf("Priorities: %v", err)
+	}
+
+	if len(page.Items) != 3 {
+		t.Fatalf("expected 3 items on page 2, got %d", len(page.Items))
+	}
+	if page.Total != 7 {
+		t.Errorf("Total = %d, expected 7", page.Total)
+	}
+	if page.TotalPages() != 3 {
+		t.Errorf("TotalPages = %d, expected 3", page.TotalPages())
+	}
+	if !page.HasNext() || !page.HasPrevious() {
+		t.Error("expected both next and previous on page 2 of 3")
+	}
+
+	// A paginação recorta a lista já ordenada: nenhum score da página 2 pode
+	// ser maior que os da página 1.
+	first, err := restock.Priorities(ctx, domain.PageRequest{Number: 1, Size: 3})
+	if err != nil {
+		t.Fatalf("Priorities: %v", err)
+	}
+	lastOfFirst := first.Items[len(first.Items)-1].UrgencyScore
+	if page.Items[0].UrgencyScore > lastOfFirst {
+		t.Errorf("page 2 starts at %v, above the end of page 1 (%v)",
+			page.Items[0].UrgencyScore, lastOfFirst)
+	}
+}
+
+func TestRestockPrioritiesIgnoresRepositoryPageSize(t *testing.T) {
+	ctx := context.Background()
+	repo := memory.NewPartRepository()
+	parts := service.NewPartService(repo)
+	restock := service.NewRestockService(repo)
+
+	total := domain.MaxPageSize + 10
 	for i := range total {
 		seedPart(t, parts, fmt.Sprintf("Part %04d", i), 0, 10, 1, 1, 3)
 	}
 
-	priorities, err := restock.Priorities(ctx)
+	page, err := restock.Priorities(ctx, allPages())
 	if err != nil {
 		t.Fatalf("Priorities: %v", err)
 	}
-	if len(priorities) != total {
-		t.Errorf("expected %d priorities, got %d", total, len(priorities))
+	// O cálculo enxerga a base inteira, mesmo com a página limitada a 500.
+	if page.Total != total {
+		t.Errorf("Total = %d, expected %d", page.Total, total)
+	}
+	if len(page.Items) != domain.MaxPageSize {
+		t.Errorf("expected %d items, got %d", domain.MaxPageSize, len(page.Items))
 	}
 }
 
 func TestRestockPrioritiesEmptyRepository(t *testing.T) {
 	restock := service.NewRestockService(memory.NewPartRepository())
 
-	priorities, err := restock.Priorities(context.Background())
+	page, err := restock.Priorities(context.Background(), allPages())
 	if err != nil {
 		t.Fatalf("Priorities: %v", err)
 	}
-	if len(priorities) != 0 {
-		t.Errorf("expected 0 priorities, got %d", len(priorities))
+	if len(page.Items) != 0 {
+		t.Errorf("expected 0 priorities, got %d", len(page.Items))
+	}
+	if page.Total != 0 || page.TotalPages() != 0 {
+		t.Errorf("expected an empty page, got total=%d pages=%d", page.Total, page.TotalPages())
 	}
 }

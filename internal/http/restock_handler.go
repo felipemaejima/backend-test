@@ -15,10 +15,10 @@ func NewRestockHandler(svc *service.RestockService) *RestockHandler {
 }
 
 func (h *RestockHandler) Priorities(c *fiber.Ctx) error {
-	priorities, err := h.service.Priorities(c.Context())
+	page, err := h.service.Priorities(c.Context(), pageRequest(c))
 	if err != nil {
 		return err
 	}
 
-	return c.JSON(newRestockPrioritiesResponse(priorities))
+	return c.JSON(newRestockPrioritiesResponse(page))
 }

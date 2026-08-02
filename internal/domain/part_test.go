@@ -239,37 +239,3 @@ func TestApplyPreservesIdentity(t *testing.T) {
 		t.Errorf("Name = %q, expected the update", part.Name)
 	}
 }
-
-func TestPartFilterNormalizePagination(t *testing.T) {
-	tests := []struct {
-		name       string
-		filter     PartFilter
-		wantLimit  int
-		wantOffset int
-	}{
-		{"missing limit falls back to default", PartFilter{}, DefaultListLimit, 0},
-		{"negative limit falls back to default", PartFilter{Limit: -5}, DefaultListLimit, 0},
-		{"limit above cap is clamped", PartFilter{Limit: 10_000}, MaxListLimit, 0},
-		{"valid limit is preserved", PartFilter{Limit: 20, Offset: 40}, 20, 40},
-		{"negative offset becomes zero", PartFilter{Limit: 10, Offset: -1}, 10, 0},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := tt.filter.Normalize()
-			if got.Limit != tt.wantLimit {
-				t.Errorf("Limit = %d, expected %d", got.Limit, tt.wantLimit)
-			}
-			if got.Offset != tt.wantOffset {
-				t.Errorf("Offset = %d, expected %d", got.Offset, tt.wantOffset)
-			}
-		})
-	}
-}
-
-func TestPartFilterNormalizeCategory(t *testing.T) {
-	got := PartFilter{Category: "  ENGINE  "}.Normalize()
-	if got.Category != "engine" {
-		t.Errorf("Category = %q, expected %q", got.Category, "engine")
-	}
-}

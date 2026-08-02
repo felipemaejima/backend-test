@@ -130,30 +130,53 @@ func (r *runner) testRead(partID string) {
 func (r *runner) testList() {
 	r.section("List")
 
-	res := r.request(http.MethodGet, "/parts?category="+r.category+"&limit=100", "")
+	res := r.request(http.MethodGet, "/parts?category="+r.category+"&n=100", "")
 	r.expectStatus(res, http.StatusOK, "GET /parts?category=...")
 	r.expectNames(res, []string{"Correia Smoke", "Filtro Smoke", "Pastilha Smoke"},
 		"returns this run's parts ordered by name")
+	r.expectPagination(res, "total", 3, "pagination reports the filtered total")
+	r.expectPagination(res, "totalPages", 1, "everything fits in one page")
+	r.expectPagination(res, "hasNext", false, "no next page")
+	r.expectPagination(res, "hasPrevious", false, "no previous page")
 
-	res = r.request(http.MethodGet, "/parts?category="+strings.ToUpper(r.category)+"&limit=100", "")
+	res = r.request(http.MethodGet, "/parts?category="+strings.ToUpper(r.category)+"&n=100", "")
 	r.expectStatus(res, http.StatusOK, "category filter is case insensitive")
 	r.expectCount(res, 3, "finds the same parts with an uppercase category")
 
 	res = r.request(http.MethodGet, "/parts?category=category-that-does-not-exist", "")
 	r.expectStatus(res, http.StatusOK, "category with no parts")
 	r.check(isEmptyArray(res), "returns an empty array, not null", "parts field is not an empty array")
+	r.expectPagination(res, "total", 0, "empty category reports zero total")
+	r.expectPagination(res, "totalPages", 0, "empty category has no pages")
 
-	res = r.request(http.MethodGet, "/parts?category="+r.category+"&limit=2", "")
-	r.expectStatus(res, http.StatusOK, "GET /parts?limit=2")
-	r.expectCount(res, 2, "respects the limit")
+	res = r.request(http.MethodGet, "/parts?category="+r.category+"&n=2", "")
+	r.expectStatus(res, http.StatusOK, "GET /parts?n=2")
+	r.expectNames(res, []string{"Correia Smoke", "Filtro Smoke"}, "first page respects n")
+	r.expectPagination(res, "page", 1, "defaults to page 1")
+	r.expectPagination(res, "perPage", 2, "perPage echoes n")
+	r.expectPagination(res, "totalPages", 2, "3 parts in pages of 2 is 2 pages")
+	r.expectPagination(res, "hasNext", true, "there is a next page")
 
-	res = r.request(http.MethodGet, "/parts?category="+r.category+"&limit=2&offset=1", "")
-	r.expectStatus(res, http.StatusOK, "GET /parts?limit=2&offset=1")
-	r.expectNames(res, []string{"Filtro Smoke", "Pastilha Smoke"}, "pagination advances in order")
+	res = r.request(http.MethodGet, "/parts?category="+r.category+"&n=2&page=2", "")
+	r.expectStatus(res, http.StatusOK, "GET /parts?n=2&page=2")
+	r.expectNames(res, []string{"Pastilha Smoke"}, "second page continues the ordering")
+	r.expectPagination(res, "hasNext", false, "last page has no next")
+	r.expectPagination(res, "hasPrevious", true, "last page has a previous")
 
-	res = r.request(http.MethodGet, "/parts?category="+r.category+"&limit=abc&offset=xyz", "")
+	res = r.request(http.MethodGet, "/parts?category="+r.category+"&n=2&page=99", "")
+	r.expectStatus(res, http.StatusOK, "page beyond the end")
+	r.expectCount(res, 0, "returns no items")
+	r.expectPagination(res, "total", 3, "still reports the real total")
+
+	res = r.request(http.MethodGet, "/parts?category="+r.category+"&n=abc&page=xyz", "")
 	r.expectStatus(res, http.StatusOK, "invalid pagination falls back to defaults")
 	r.expectCount(res, 3, "full list with defaults")
+	r.expectPagination(res, "page", 1, "invalid page falls back to 1")
+	r.expectPagination(res, "perPage", 50, "invalid n falls back to the default")
+
+	res = r.request(http.MethodGet, "/parts?category="+r.category+"&n=100000", "")
+	r.expectStatus(res, http.StatusOK, "n above the cap")
+	r.expectPagination(res, "perPage", 500, "n is clamped to the maximum")
 }
 
 func (r *runner) testRestock() {
@@ -197,6 +220,20 @@ func (r *runner) testRestock() {
 	}
 
 	r.check(sortedByUrgency(res), "whole list is sorted by urgency score", "found a lower score before a higher one")
+
+	total, ok := paginationNumber(res, "total")
+	r.check(ok && total >= 3, "pagination total covers at least this run's parts",
+		fmt.Sprintf("total = %v, expected at least 3", total))
+
+	res = r.request(http.MethodGet, "/restock/priorities?n=1", "")
+	r.expectStatus(res, http.StatusOK, "GET /restock/priorities?n=1")
+	r.expectPriorityCount(res, 1, "respects n")
+	r.expectPagination(res, "perPage", 1, "perPage echoes n")
+	r.expectPagination(res, "total", total, "total is the whole queue, not the page")
+	r.expectPagination(res, "totalPages", total, "one part per page")
+	if total > 1 {
+		r.expectPagination(res, "hasNext", true, "there is a next page")
+	}
 }
 
 func (r *runner) testUpdate(partID string) {
@@ -349,9 +386,27 @@ func (r *runner) expectField(res result, key string, want any, label string) {
 		fmt.Sprintf("field %q = %s, expected %s", key, got, wantStr))
 }
 
+func (r *runner) expectPagination(res result, key string, want any, label string) {
+	page, ok := res.body["pagination"].(map[string]any)
+	if !ok {
+		r.check(false, label, "response has no pagination object")
+		return
+	}
+
+	got := fmt.Sprintf("%v", page[key])
+	wantStr := fmt.Sprintf("%v", want)
+	r.check(got == wantStr, label,
+		fmt.Sprintf("pagination.%s = %s, expected %s", key, got, wantStr))
+}
+
 func (r *runner) expectCount(res result, want int, label string) {
 	got := len(partNames(res))
 	r.check(got == want, label, fmt.Sprintf("expected %d part(s), got %d", want, got))
+}
+
+func (r *runner) expectPriorityCount(res result, want int, label string) {
+	got := len(priorityItems(res))
+	r.check(got == want, label, fmt.Sprintf("expected %d priority(ies), got %d", want, got))
 }
 
 func (r *runner) expectNames(res result, want []string, label string) {
@@ -409,6 +464,15 @@ func partNames(res result) []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+func paginationNumber(res result, key string) (float64, bool) {
+	page, ok := res.body["pagination"].(map[string]any)
+	if !ok {
+		return 0, false
+	}
+	value, ok := page[key].(float64)
+	return value, ok
 }
 
 func priorityItems(res result) []map[string]any {

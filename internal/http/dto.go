@@ -67,16 +67,37 @@ func newPartResponse(part domain.Part) partResponse {
 	}
 }
 
-type partListResponse struct {
-	Parts []partResponse `json:"parts"`
+type paginationResponse struct {
+	Page        int  `json:"page"`
+	PerPage     int  `json:"perPage"`
+	Total       int  `json:"total"`
+	TotalPages  int  `json:"totalPages"`
+	HasNext     bool `json:"hasNext"`
+	HasPrevious bool `json:"hasPrevious"`
 }
 
-func newPartListResponse(parts []domain.Part) partListResponse {
-	items := make([]partResponse, 0, len(parts))
-	for _, part := range parts {
+func newPaginationResponse[T any](page domain.Page[T]) paginationResponse {
+	return paginationResponse{
+		Page:        page.Number,
+		PerPage:     page.Size,
+		Total:       page.Total,
+		TotalPages:  page.TotalPages(),
+		HasNext:     page.HasNext(),
+		HasPrevious: page.HasPrevious(),
+	}
+}
+
+type partListResponse struct {
+	Parts      []partResponse     `json:"parts"`
+	Pagination paginationResponse `json:"pagination"`
+}
+
+func newPartListResponse(page domain.Page[domain.Part]) partListResponse {
+	items := make([]partResponse, 0, len(page.Items))
+	for _, part := range page.Items {
 		items = append(items, newPartResponse(part))
 	}
-	return partListResponse{Parts: items}
+	return partListResponse{Parts: items, Pagination: newPaginationResponse(page)}
 }
 
 type restockPriorityResponse struct {
@@ -90,11 +111,12 @@ type restockPriorityResponse struct {
 
 type restockPrioritiesResponse struct {
 	Priorities []restockPriorityResponse `json:"priorities"`
+	Pagination paginationResponse        `json:"pagination"`
 }
 
-func newRestockPrioritiesResponse(priorities []domain.RestockPriority) restockPrioritiesResponse {
-	items := make([]restockPriorityResponse, 0, len(priorities))
-	for _, priority := range priorities {
+func newRestockPrioritiesResponse(page domain.Page[domain.RestockPriority]) restockPrioritiesResponse {
+	items := make([]restockPriorityResponse, 0, len(page.Items))
+	for _, priority := range page.Items {
 		items = append(items, restockPriorityResponse{
 			PartID:         priority.Part.ID.String(),
 			Name:           priority.Part.Name,
@@ -104,5 +126,5 @@ func newRestockPrioritiesResponse(priorities []domain.RestockPriority) restockPr
 			UrgencyScore:   round(priority.UrgencyScore),
 		})
 	}
-	return restockPrioritiesResponse{Priorities: items}
+	return restockPrioritiesResponse{Priorities: items, Pagination: newPaginationResponse(page)}
 }

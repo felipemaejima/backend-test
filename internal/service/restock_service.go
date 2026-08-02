@@ -14,10 +14,11 @@ func NewRestockService(repo domain.PartRepository) *RestockService {
 	return &RestockService{repo: repo}
 }
 
-func (s *RestockService) Priorities(ctx context.Context) ([]domain.RestockPriority, error) {
+func (s *RestockService) Priorities(ctx context.Context, request domain.PageRequest) (domain.Page[domain.RestockPriority], error) {
 	parts, err := s.repo.ListAll(ctx)
 	if err != nil {
-		return nil, err
+		return domain.Page[domain.RestockPriority]{}, err
 	}
-	return domain.CalculateRestockPriorities(parts), nil
+
+	return domain.Paginate(domain.CalculateRestockPriorities(parts), request), nil
 }

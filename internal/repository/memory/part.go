@@ -60,7 +60,7 @@ func (r *PartRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Pa
 	return &part, nil
 }
 
-func (r *PartRepository) List(ctx context.Context, filter domain.PartFilter) ([]domain.Part, error) {
+func (r *PartRepository) List(ctx context.Context, filter domain.PartFilter) (domain.Page[domain.Part], error) {
 	filter = filter.Normalize()
 
 	r.mu.RLock()
@@ -75,11 +75,7 @@ func (r *PartRepository) List(ctx context.Context, filter domain.PartFilter) ([]
 	}
 	sortByName(filtered)
 
-	if filter.Offset >= len(filtered) {
-		return []domain.Part{}, nil
-	}
-	end := min(filter.Offset+filter.Limit, len(filtered))
-	return filtered[filter.Offset:end], nil
+	return domain.Paginate(filtered, filter.Page), nil
 }
 
 func (r *PartRepository) ListAll(ctx context.Context) ([]domain.Part, error) {

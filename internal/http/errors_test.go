@@ -40,8 +40,8 @@ func (r failingRepository) FindByID(context.Context, uuid.UUID) (*domain.Part, e
 	return nil, r.err
 }
 
-func (r failingRepository) List(context.Context, domain.PartFilter) ([]domain.Part, error) {
-	return nil, r.err
+func (r failingRepository) List(context.Context, domain.PartFilter) (domain.Page[domain.Part], error) {
+	return domain.Page[domain.Part]{}, r.err
 }
 
 func (r failingRepository) ListAll(context.Context) ([]domain.Part, error) {

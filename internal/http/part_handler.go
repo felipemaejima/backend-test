@@ -37,16 +37,15 @@ func (h *PartHandler) Create(c *fiber.Ctx) error {
 func (h *PartHandler) List(c *fiber.Ctx) error {
 	filter := domain.PartFilter{
 		Category: c.Query("category"),
-		Limit:    queryInt(c, "limit"),
-		Offset:   queryInt(c, "offset"),
+		Page:     pageRequest(c),
 	}
 
-	parts, err := h.service.List(c.Context(), filter)
+	page, err := h.service.List(c.Context(), filter)
 	if err != nil {
 		return err
 	}
 
-	return c.JSON(newPartListResponse(parts))
+	return c.JSON(newPartListResponse(page))
 }
 
 // GetByID trata GET /parts/:id.
@@ -112,4 +111,11 @@ func queryInt(c *fiber.Ctx, key string) int {
 		return 0
 	}
 	return value
+}
+
+func pageRequest(c *fiber.Ctx) domain.PageRequest {
+	return domain.PageRequest{
+		Number: queryInt(c, "page"),
+		Size:   queryInt(c, "n"),
+	}
 }

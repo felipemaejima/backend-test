@@ -120,21 +120,33 @@ func (r *PartRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Pa
 	return &part, nil
 }
 
-func (r *PartRepository) List(ctx context.Context, filter domain.PartFilter) ([]domain.Part, error) {
+func (r *PartRepository) List(ctx context.Context, filter domain.PartFilter) (domain.Page[domain.Part], error) {
 	filter = filter.Normalize()
 
+	var total int64
+	if err := r.filtered(ctx, filter).Count(&total).Error; err != nil {
+		return domain.Page[domain.Part]{}, err
+	}
+
+	var models []partModel
+	err := r.filtered(ctx, filter).
+		Order("name, id").
+		Limit(filter.Page.Size).
+		Offset(filter.Page.Offset()).
+		Find(&models).Error
+	if err != nil {
+		return domain.Page[domain.Part]{}, err
+	}
+
+	return domain.NewPage(toDomainSlice(models), filter.Page, int(total)), nil
+}
+
+func (r *PartRepository) filtered(ctx context.Context, filter domain.PartFilter) *gorm.DB {
 	query := r.db.WithContext(ctx).Model(&partModel{})
 	if filter.Category != "" {
 		query = query.Where("category = ?", filter.Category)
 	}
-
-	var models []partModel
-	err := query.Order("name, id").Limit(filter.Limit).Offset(filter.Offset).Find(&models).Error
-	if err != nil {
-		return nil, err
-	}
-
-	return toDomainSlice(models), nil
+	return query
 }
 
 func (r *PartRepository) ListAll(ctx context.Context) ([]domain.Part, error) {

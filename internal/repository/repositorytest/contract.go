@@ -120,13 +120,16 @@ func testListOrder(t *testing.T, repo domain.PartRepository) {
 		testPart{"Filtro de Óleo X", "engine"},
 	)
 
-	parts, err := repo.List(ctx, domain.PartFilter{})
+	page, err := repo.List(ctx, domain.PartFilter{})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
 
 	want := []string{"Correia Dentada Z", "Filtro de Óleo X", "Pastilha de Freio Y"}
-	assertNames(t, parts, want)
+	assertNames(t, page.Items, want)
+	if page.Total != len(want) {
+		t.Errorf("Total = %d, expected %d", page.Total, len(want))
+	}
 }
 
 func testListCategory(t *testing.T, repo domain.PartRepository) {
@@ -137,11 +140,15 @@ func testListCategory(t *testing.T, repo domain.PartRepository) {
 		testPart{"Pastilha de Freio Y", "brakes"},
 	)
 
-	parts, err := repo.List(ctx, domain.PartFilter{Category: "engine"})
+	page, err := repo.List(ctx, domain.PartFilter{Category: "engine"})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	assertNames(t, parts, []string{"Correia Dentada Z", "Filtro de Óleo X"})
+	assertNames(t, page.Items, []string{"Correia Dentada Z", "Filtro de Óleo X"})
+	// O total precisa refletir o filtro, não a tabela inteira.
+	if page.Total != 2 {
+		t.Errorf("Total = %d, expected 2", page.Total)
+	}
 }
 
 func testListPagination(t *testing.T, repo domain.PartRepository) {
@@ -151,36 +158,56 @@ func testListPagination(t *testing.T, repo domain.PartRepository) {
 		testPart{"D", "engine"}, testPart{"E", "engine"},
 	)
 
-	parts, err := repo.List(ctx, domain.PartFilter{Limit: 2, Offset: 2})
+	page, err := repo.List(ctx, domain.PartFilter{Page: domain.PageRequest{Number: 2, Size: 2}})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	assertNames(t, parts, []string{"C", "D"})
+	assertNames(t, page.Items, []string{"C", "D"})
+	if page.Total != 5 {
+		t.Errorf("Total = %d, expected 5", page.Total)
+	}
+	if page.TotalPages() != 3 {
+		t.Errorf("TotalPages = %d, expected 3", page.TotalPages())
+	}
+	if !page.HasNext() || !page.HasPrevious() {
+		t.Error("expected both next and previous on the middle page")
+	}
 }
 
 func testListOffsetBeyondEnd(t *testing.T, repo domain.PartRepository) {
 	ctx := context.Background()
 	seed(t, repo, testPart{"A", "engine"})
 
-	parts, err := repo.List(ctx, domain.PartFilter{Limit: 10, Offset: 99})
+	page, err := repo.List(ctx, domain.PartFilter{Page: domain.PageRequest{Number: 99, Size: 10}})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(parts) != 0 {
-		t.Errorf("expected empty collection, got %d", len(parts))
+	if len(page.Items) != 0 {
+		t.Errorf("expected empty collection, got %d", len(page.Items))
+	}
+	// Página vazia ainda reporta o total real da coleção.
+	if page.Total != 1 {
+		t.Errorf("Total = %d, expected 1", page.Total)
 	}
 }
 
 func testListDefaultLimit(t *testing.T, repo domain.PartRepository) {
 	ctx := context.Background()
-	seedMany(t, repo, domain.DefaultListLimit+10)
+	const total = domain.DefaultPageSize + 10
+	seedMany(t, repo, total)
 
-	parts, err := repo.List(ctx, domain.PartFilter{})
+	page, err := repo.List(ctx, domain.PartFilter{})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(parts) != domain.DefaultListLimit {
-		t.Errorf("expected %d parts, got %d", domain.DefaultListLimit, len(parts))
+	if len(page.Items) != domain.DefaultPageSize {
+		t.Errorf("expected %d parts, got %d", domain.DefaultPageSize, len(page.Items))
+	}
+	if page.Total != total {
+		t.Errorf("Total = %d, expected %d", page.Total, total)
+	}
+	if !page.HasNext() {
+		t.Error("expected HasNext on the first of two pages")
 	}
 }
 
@@ -188,19 +215,24 @@ func testListMaxLimit(t *testing.T, repo domain.PartRepository) {
 	ctx := context.Background()
 	seedMany(t, repo, 10)
 
-	parts, err := repo.List(ctx, domain.PartFilter{Limit: domain.MaxListLimit * 100})
+	page, err := repo.List(ctx, domain.PartFilter{
+		Page: domain.PageRequest{Size: domain.MaxPageSize * 100},
+	})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(parts) != 10 {
-		t.Errorf("expected 10 parts, got %d", len(parts))
+	if len(page.Items) != 10 {
+		t.Errorf("expected 10 parts, got %d", len(page.Items))
+	}
+	if page.Size != domain.MaxPageSize {
+		t.Errorf("Size = %d, expected it clamped to %d", page.Size, domain.MaxPageSize)
 	}
 }
 
 func testListAll(t *testing.T, repo domain.PartRepository) {
 	ctx := context.Background()
 
-	const total = domain.DefaultListLimit + 10
+	const total = domain.DefaultPageSize + 10
 	seedMany(t, repo, total)
 
 	parts, err := repo.ListAll(ctx)

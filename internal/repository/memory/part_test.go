@@ -58,11 +58,16 @@ func TestConcurrentAccess(t *testing.T) {
 
 	wg.Wait()
 
-	parts, err := repo.List(ctx, domain.PartFilter{Limit: domain.MaxListLimit})
+	page, err := repo.List(ctx, domain.PartFilter{
+		Page: domain.PageRequest{Size: domain.MaxPageSize},
+	})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(parts) != goroutines {
-		t.Errorf("expected %d parts, got %d", goroutines, len(parts))
+	if len(page.Items) != goroutines {
+		t.Errorf("expected %d parts, got %d", goroutines, len(page.Items))
+	}
+	if page.Total != goroutines {
+		t.Errorf("Total = %d, expected %d", page.Total, goroutines)
 	}
 }

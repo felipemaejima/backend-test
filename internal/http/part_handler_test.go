@@ -54,13 +54,34 @@ func partNames(t *testing.T, body map[string]any) []string {
 	return names
 }
 
-func TestListRespectsLimitAndOffset(t *testing.T) {
+func pagination(t *testing.T, body map[string]any) map[string]any {
+	t.Helper()
+
+	page, ok := body["pagination"].(map[string]any)
+	if !ok {
+		t.Fatalf("pagination = %v, expected an object", body["pagination"])
+	}
+	return page
+}
+
+func assertPagination(t *testing.T, body map[string]any, want map[string]any) {
+	t.Helper()
+
+	got := pagination(t, body)
+	for key, expected := range want {
+		if got[key] != expected {
+			t.Errorf("pagination.%s = %v, expected %v (full: %v)", key, got[key], expected, got)
+		}
+	}
+}
+
+func TestListRespectsPageAndSize(t *testing.T) {
 	app := newTestApp()
 	for _, name := range []string{"A", "B", "C", "D", "E"} {
 		createPart(t, app, name, "engine")
 	}
 
-	status, body := do(t, app, http.MethodGet, "/parts?limit=2&offset=2", "")
+	status, body := do(t, app, http.MethodGet, "/parts?n=2&page=2", "")
 	if status != http.StatusOK {
 		t.Fatalf("status = %d, expected 200", status)
 	}
@@ -69,19 +90,93 @@ func TestListRespectsLimitAndOffset(t *testing.T) {
 	if len(names) != 2 || names[0] != "C" || names[1] != "D" {
 		t.Errorf("list = %v, expected [C D]", names)
 	}
+
+	assertPagination(t, body, map[string]any{
+		"page":        float64(2),
+		"perPage":     float64(2),
+		"total":       float64(5),
+		"totalPages":  float64(3),
+		"hasNext":     true,
+		"hasPrevious": true,
+	})
+}
+
+func TestListPaginationOnTheFirstPage(t *testing.T) {
+	app := newTestApp()
+	for _, name := range []string{"A", "B", "C"} {
+		createPart(t, app, name, "engine")
+	}
+
+	_, body := do(t, app, http.MethodGet, "/parts?n=2", "")
+
+	assertPagination(t, body, map[string]any{
+		"page":        float64(1),
+		"perPage":     float64(2),
+		"total":       float64(3),
+		"totalPages":  float64(2),
+		"hasNext":     true,
+		"hasPrevious": false,
+	})
+}
+
+func TestListPaginationBeyondTheLastPage(t *testing.T) {
+	app := newTestApp()
+	createPart(t, app, "A", "engine")
+
+	status, body := do(t, app, http.MethodGet, "/parts?n=10&page=99", "")
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, expected 200", status)
+	}
+	if names := partNames(t, body); len(names) != 0 {
+		t.Errorf("list = %v, expected empty", names)
+	}
+	// A página vem vazia, mas o total continua verdadeiro.
+	assertPagination(t, body, map[string]any{
+		"page":       float64(99),
+		"total":      float64(1),
+		"totalPages": float64(1),
+		"hasNext":    false,
+	})
+}
+
+func TestListPaginationCountsOnlyTheFilteredCategory(t *testing.T) {
+	app := newTestApp()
+	createPart(t, app, "A", "engine")
+	createPart(t, app, "B", "engine")
+	createPart(t, app, "C", "brakes")
+
+	_, body := do(t, app, http.MethodGet, "/parts?category=engine", "")
+
+	assertPagination(t, body, map[string]any{
+		"total":      float64(2),
+		"totalPages": float64(1),
+	})
+}
+
+func TestListPaginationClampsPageSize(t *testing.T) {
+	app := newTestApp()
+	createPart(t, app, "A", "engine")
+
+	_, body := do(t, app, http.MethodGet, "/parts?n=100000", "")
+
+	assertPagination(t, body, map[string]any{"perPage": float64(500)})
 }
 
 func TestListIgnoresInvalidPagination(t *testing.T) {
 	app := newTestApp()
 	createPart(t, app, "A", "engine")
 
-	status, body := do(t, app, http.MethodGet, "/parts?limit=abc&offset=xyz", "")
+	status, body := do(t, app, http.MethodGet, "/parts?n=abc&page=xyz", "")
 	if status != http.StatusOK {
 		t.Fatalf("status = %d, expected 200", status)
 	}
 	if names := partNames(t, body); len(names) != 1 {
 		t.Errorf("list = %v, expected 1 part", names)
 	}
+	assertPagination(t, body, map[string]any{
+		"page":    float64(1),
+		"perPage": float64(50),
+	})
 }
 
 func TestCategoryFilterIsCaseInsensitive(t *testing.T) {
