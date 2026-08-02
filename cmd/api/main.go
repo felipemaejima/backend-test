@@ -25,7 +25,10 @@ func main() {
 }
 
 func run() error {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
 
 	log, closeLog, err := logger.New(logger.Config{
 		Level:  cfg.Log.Level,
