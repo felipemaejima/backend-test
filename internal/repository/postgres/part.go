@@ -12,17 +12,17 @@ import (
 )
 
 type partModel struct {
-	ID                uuid.UUID `gorm:"column:id;type:uuid;primaryKey"`
-	Name              string    `gorm:"column:name;type:varchar(120);not null"`
-	Category          string    `gorm:"column:category;type:varchar(60);not null;index"`
-	CurrentStock      int       `gorm:"column:current_stock;not null"`
-	MinimumStock      int       `gorm:"column:minimum_stock;not null"`
-	AverageDailySales float64   `gorm:"column:average_daily_sales;type:numeric(12,4);not null"`
-	LeadTimeDays      int       `gorm:"column:lead_time_days;not null"`
-	UnitCost          float64   `gorm:"column:unit_cost;type:numeric(12,2);not null"`
-	CriticalityLevel  int       `gorm:"column:criticality_level;not null"`
-	CreatedAt         time.Time `gorm:"column:created_at;autoCreateTime:false;not null"`
-	UpdatedAt         time.Time `gorm:"column:updated_at;autoUpdateTime:false;not null"`
+	ID                uuid.UUID `gorm:"column:id;primaryKey"`
+	Name              string    `gorm:"column:name"`
+	Category          string    `gorm:"column:category"`
+	CurrentStock      int       `gorm:"column:current_stock"`
+	MinimumStock      int       `gorm:"column:minimum_stock"`
+	AverageDailySales float64   `gorm:"column:average_daily_sales"`
+	LeadTimeDays      int       `gorm:"column:lead_time_days"`
+	UnitCost          float64   `gorm:"column:unit_cost"`
+	CriticalityLevel  int       `gorm:"column:criticality_level"`
+	CreatedAt         time.Time `gorm:"column:created_at;autoCreateTime:false"`
+	UpdatedAt         time.Time `gorm:"column:updated_at;autoUpdateTime:false"`
 }
 
 func (partModel) TableName() string { return "parts" }
@@ -149,6 +149,9 @@ func (r *PartRepository) filtered(ctx context.Context, filter domain.PartFilter)
 	return query
 }
 
+// ListAll ordena por (name, id) não para apresentação — o resultado é
+// reordenado por urgência logo em seguida — mas para dar entrada determinística
+// ao sort estável quando duas peças empatam em todos os critérios.
 func (r *PartRepository) ListAll(ctx context.Context) ([]domain.Part, error) {
 	var models []partModel
 	err := r.db.WithContext(ctx).Model(&partModel{}).Order("name, id").Find(&models).Error
