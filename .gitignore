@@ -6,6 +6,9 @@ tmp/
 # ambiente
 .env
 
+# logs espelhados em arquivo (LOG_FILE)
+logs/
+
 # cobertura
 *.out
 coverage.*

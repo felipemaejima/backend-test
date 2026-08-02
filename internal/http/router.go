@@ -1,6 +1,7 @@
 package http
 
 import (
+	"log/slog"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -8,7 +9,21 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/requestid"
 )
 
-func NewRouter(partHandler *PartHandler, restockHandler *RestockHandler, healthHandler *HealthHandler) *fiber.App {
+const healthPath = "/health"
+
+type RouterConfig struct {
+	Part    *PartHandler
+	Restock *RestockHandler
+	Health  *HealthHandler
+	Logger  *slog.Logger
+}
+
+func NewRouter(cfg RouterConfig) *fiber.App {
+	log := cfg.Logger
+	if log == nil {
+		log = slog.Default()
+	}
+
 	app := fiber.New(fiber.Config{
 		AppName:               "restock-api",
 		DisableStartupMessage: true,
@@ -17,19 +32,19 @@ func NewRouter(partHandler *PartHandler, restockHandler *RestockHandler, healthH
 		ErrorHandler:          errorHandler,
 	})
 
-	app.Use(requestid.New(), recovermw.New())
+	app.Use(requestid.New(), requestLogger(log), recovermw.New())
 
-	app.Get("/health", healthHandler.Health)
+	app.Get(healthPath, cfg.Health.Health)
 
 	parts := app.Group("/parts")
-	parts.Post("/", partHandler.Create)
-	parts.Get("/", partHandler.List)
-	parts.Get("/:id", partHandler.GetByID)
-	parts.Put("/:id", partHandler.Update)
-	parts.Delete("/:id", partHandler.Delete)
+	parts.Post("/", cfg.Part.Create)
+	parts.Get("/", cfg.Part.List)
+	parts.Get("/:id", cfg.Part.GetByID)
+	parts.Put("/:id", cfg.Part.Update)
+	parts.Delete("/:id", cfg.Part.Delete)
 
 	restock := app.Group("/restock")
-	restock.Get("/priorities", restockHandler.Priorities)
+	restock.Get("/priorities", cfg.Restock.Priorities)
 
 	return app
 }

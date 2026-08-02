@@ -8,6 +8,13 @@ import (
 type Config struct {
 	Port     string
 	Database DatabaseConfig
+	Log      LogConfig
+}
+
+type LogConfig struct {
+	Level  string
+	Format string
+	File   string
 }
 
 type DatabaseConfig struct {
@@ -39,6 +46,11 @@ func Load() Config {
 			Password: env("DB_PASSWORD", "restock"),
 			Name:     env("DB_NAME", "restock"),
 			SSLMode:  env("DB_SSLMODE", "disable"),
+		},
+		Log: LogConfig{
+			Level:  env("LOG_LEVEL", "info"),
+			Format: env("LOG_FORMAT", "json"),
+			File:   os.Getenv("LOG_FILE"),
 		},
 	}
 }

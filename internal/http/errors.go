@@ -2,7 +2,6 @@ package http
 
 import (
 	"errors"
-	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -32,7 +31,6 @@ func errorHandler(c *fiber.Ctx, err error) error {
 		return c.Status(fiberErr.Code).JSON(errorResponse{Error: fiberErr.Message})
 	}
 
-	slog.Error("erro não tratado", "error", err, "path", c.Path(), "method", c.Method())
 	return c.Status(fiber.StatusInternalServerError).JSON(errorResponse{
 		Error: "erro interno",
 	})

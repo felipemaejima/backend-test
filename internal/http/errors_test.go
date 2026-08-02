@@ -15,8 +15,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/felipemaejima/backend-test/internal/domain"
-	httpapi "github.com/felipemaejima/backend-test/internal/http"
-	"github.com/felipemaejima/backend-test/internal/service"
 )
 
 func TestMain(m *testing.M) {
@@ -25,6 +23,8 @@ func TestMain(m *testing.M) {
 }
 
 const internalErrorDetail = "pq: connection refused on 10.0.0.7:5432"
+
+var errTestRepository = errors.New(internalErrorDetail)
 
 type failingRepository struct {
 	err error
@@ -49,11 +49,10 @@ func (r failingRepository) ListAll(context.Context) ([]domain.Part, error) {
 }
 
 func newFailingApp() *fiber.App {
-	repo := failingRepository{err: errors.New(internalErrorDetail)}
-	return httpapi.NewRouter(
-		httpapi.NewPartHandler(service.NewPartService(repo)),
-		httpapi.NewRestockHandler(service.NewRestockService(repo)),
-		httpapi.NewHealthHandler(func(context.Context) error { return nil }),
+	return newTestAppWith(
+		failingRepository{err: errTestRepository},
+		func(context.Context) error { return nil },
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
 	)
 }
 

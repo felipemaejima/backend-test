@@ -45,8 +45,15 @@ services:
       DB_NAME: ${DB_NAME:-restock}
       DB_SSLMODE: disable
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LOG_FILE: ${LOG_FILE:-}
     ports:
       - "${APP_EXTERNAL_PORT:-8080}:8080"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - .:/app
       - gomodcache:/go/pkg/mod

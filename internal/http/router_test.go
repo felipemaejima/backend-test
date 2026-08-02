@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/felipemaejima/backend-test/internal/domain"
 	httpapi "github.com/felipemaejima/backend-test/internal/http"
 	"github.com/felipemaejima/backend-test/internal/repository/memory"
 	"github.com/felipemaejima/backend-test/internal/service"
@@ -22,12 +24,16 @@ func newTestApp() *fiber.App {
 }
 
 func newTestAppWithHealth(check httpapi.HealthChecker) *fiber.App {
-	repo := memory.NewPartRepository()
-	return httpapi.NewRouter(
-		httpapi.NewPartHandler(service.NewPartService(repo)),
-		httpapi.NewRestockHandler(service.NewRestockService(repo)),
-		httpapi.NewHealthHandler(check),
-	)
+	return newTestAppWith(memory.NewPartRepository(), check, slog.New(slog.NewTextHandler(io.Discard, nil)))
+}
+
+func newTestAppWith(repo domain.PartRepository, check httpapi.HealthChecker, log *slog.Logger) *fiber.App {
+	return httpapi.NewRouter(httpapi.RouterConfig{
+		Part:    httpapi.NewPartHandler(service.NewPartService(repo)),
+		Restock: httpapi.NewRestockHandler(service.NewRestockService(repo)),
+		Health:  httpapi.NewHealthHandler(check),
+		Logger:  log,
+	})
 }
 
 const validBody = `{
