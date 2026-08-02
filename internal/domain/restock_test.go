@@ -39,15 +39,15 @@ func TestFormulas(t *testing.T) {
 		wantNeedsRestock        bool
 	}{
 		{
-			name:                    "spec example: oil filter",
-			part:                    makePart("Filtro de Óleo X", 15, 20, 1, 10, 3),
-			wantExpectedConsumption: 10,
-			wantProjectedStock:      5,
-			wantUrgencyScore:        45,
+			name:                    "oil filter, from the entity fields published in the spec",
+			part:                    makePart("Filtro de Óleo X", 15, 20, 4, 5, 3),
+			wantExpectedConsumption: 20,
+			wantProjectedStock:      -5,
+			wantUrgencyScore:        75,
 			wantNeedsRestock:        true,
 		},
 		{
-			name:                    "spec example: brake pad",
+			name:                    "brake pad, reproducing the response row published in the spec",
 			part:                    makePart("Pastilha de Freio Y", 8, 10, 2, 5, 3),
 			wantExpectedConsumption: 10,
 			wantProjectedStock:      -2,
