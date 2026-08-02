@@ -7,6 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	recovermw "github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
+	"github.com/google/uuid"
 )
 
 const healthPath = "/health"
@@ -32,7 +33,11 @@ func NewRouter(cfg RouterConfig) *fiber.App {
 		ErrorHandler:          errorHandler,
 	})
 
-	app.Use(requestid.New(), requestLogger(log), recovermw.New())
+	app.Use(
+		requestid.New(requestid.Config{Generator: uuid.NewString}),
+		requestLogger(log),
+		recovermw.New(),
+	)
 
 	app.Get(healthPath, cfg.Health.Health)
 

@@ -25,6 +25,10 @@ func init() {
 }
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	baseURL := strings.TrimSuffix(envOr("BASE_URL", "http://localhost:8080"), "/")
 
 	r := &runner{
@@ -39,7 +43,7 @@ func main() {
 	if res := r.request(http.MethodGet, "/health", ""); res.err != nil {
 		fmt.Printf("\n%sAPI unreachable at %s%s\n", red, baseURL, reset)
 		fmt.Printf("%v\n\nStart the environment with `make up` before running.\n", res.err)
-		os.Exit(1)
+		return 1
 	}
 
 	defer r.cleanup()
@@ -54,7 +58,7 @@ func main() {
 	r.testDelete(partID)
 	r.testRoutes()
 
-	os.Exit(r.report())
+	return r.report()
 }
 
 func (r *runner) testHealth() {
@@ -63,6 +67,10 @@ func (r *runner) testHealth() {
 	res := r.request(http.MethodGet, "/health", "")
 	r.expectStatus(res, http.StatusOK, "GET /health")
 	r.expectField(res, "status", "ok", "body reports status ok")
+	r.expectField(res, "database", "up", "health confirms the database is reachable")
+
+	r.check(res.header.Get("X-Request-ID") != "",
+		"response carries X-Request-ID", "header is missing")
 }
 
 func (r *runner) testCreate() string {
@@ -242,6 +250,7 @@ type result struct {
 	status int
 	body   map[string]any
 	raw    string
+	header http.Header
 	err    error
 }
 
@@ -280,7 +289,7 @@ func (r *runner) request(method, path, body string) result {
 		return result{status: resp.StatusCode, err: err}
 	}
 
-	res := result{status: resp.StatusCode, raw: string(raw)}
+	res := result{status: resp.StatusCode, raw: string(raw), header: resp.Header}
 	if len(raw) > 0 {
 		_ = json.Unmarshal(raw, &res.body)
 	}

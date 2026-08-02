@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 
 	"github.com/felipemaejima/backend-test/internal/domain"
 	"github.com/felipemaejima/backend-test/internal/repository/memory"
@@ -123,6 +124,59 @@ func TestInternalErrorIsLoggedWithDetail(t *testing.T) {
 	// O detalhe fica no log, nunca na resposta — o inverso é coberto em errors_test.go.
 	if detail, _ := line["error"].(string); detail != internalErrorDetail {
 		t.Errorf("error = %v, expected the underlying detail", line["error"])
+	}
+}
+
+func TestRequestIDIsARandomUUID(t *testing.T) {
+	app, buf := newLoggingApp(t, memory.NewPartRepository())
+
+	const requests = 5
+	for range requests {
+		do(t, app, http.MethodGet, "/parts", "")
+	}
+
+	lines := logLines(t, buf)
+	if len(lines) != requests {
+		t.Fatalf("expected %d log lines, got %d", requests, len(lines))
+	}
+
+	seen := make(map[string]bool, requests)
+	for _, line := range lines {
+		id, _ := line["request_id"].(string)
+
+		parsed, err := uuid.Parse(id)
+		if err != nil {
+			t.Fatalf("request_id %q is not a valid UUID: %v", id, err)
+		}
+		if parsed.Version() != 4 {
+			t.Errorf("request_id %q is UUID v%d, expected v4", id, parsed.Version())
+		}
+		if seen[id] {
+			t.Errorf("request_id %q was reused across requests", id)
+		}
+		seen[id] = true
+	}
+}
+
+func TestIncomingRequestIDIsPreserved(t *testing.T) {
+	app, buf := newLoggingApp(t, memory.NewPartRepository())
+
+	const upstreamID = "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+
+	req := httptest.NewRequest(http.MethodGet, "/parts", nil)
+	req.Header.Set(fiber.HeaderXRequestID, upstreamID)
+
+	resp, err := app.Test(req, 5000)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if got := resp.Header.Get(fiber.HeaderXRequestID); got != upstreamID {
+		t.Errorf("response header = %q, expected the upstream id back", got)
+	}
+	if logged := lastLine(t, buf)["request_id"]; logged != upstreamID {
+		t.Errorf("request_id = %v, expected the upstream id %q", logged, upstreamID)
 	}
 }
 
